@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Настройки - TOTC Pass | Password Pass</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <div class="main-layout">
+      <!-- Левая колонка: Навигация -->
+      <aside class="sidebar">
+        <nav class="nav-menu">
+          <button class="nav-item active" data-section="passwords">
+            <span class="nav-icon">🔑</span>
+            <span class="nav-text">Пароли</span>
+          </button>
+          <button class="nav-item" data-section="saved-passwords">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">Сохранённые пароли</span>
+          </button>
+          <button class="nav-item" data-section="data">
+            <span class="nav-icon">📝</span>
+            <span class="nav-text">Данные</span>
+          </button>
+          <button class="nav-item" data-section="security">
+            <span class="nav-icon">🛡️</span>
+            <span class="nav-text">Безопасность</span>
+          </button>
+          <button class="nav-item" data-section="export-import">
+            <span class="nav-icon">📤</span>
+            <span class="nav-text">Экспорт и Импорт</span>
+          </button>
+          <button class="nav-item" data-section="about">
+            <span class="nav-icon">ℹ️</span>
+            <span class="nav-text">Сведения</span>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- Правая колонка: Контент -->
+      <main class="content-area">
+        <!-- Раздел: Пароли -->
+        <section id="passwords-section" class="content-section active">
+          <div class="section-header">
+            <h2>Пароли</h2>
+            <p class="section-description">Управление паролями и белым списком сайтов</p>
+          </div>
+
+          <div class="section-content">
+            <!-- Настройки генератора паролей -->
+            <div class="subsection">
+              <h3>Генератор паролей</h3>
+              <p class="subsection-description">Настройте параметры генерации безопасных паролей</p>
+              
+              <div class="password-generator-settings">
+                <div class="form-group">
+                  <label for="password-length">Длина пароля (8-128 символов):</label>
+                  <input type="range" id="password-length" min="8" max="128" value="16" class="range-input">
+                  <div class="range-value">
+                    <span id="password-length-value">16</span> символов
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <label>Типы символов:</label>
+                  <div class="checkbox-group">
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="include-uppercase" checked>
+                      <span>Заглавные буквы (A-Z)</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="include-lowercase" checked>
+                      <span>Строчные буквы (a-z)</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="include-numbers" checked>
+                      <span>Цифры (0-9)</span>
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="include-special" checked>
+                      <span>Специальные символы (!@#$%...)</span>
+                    </label>
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="exclude-similar" checked>
+                    <span>Исключить похожие символы (0/O, 1/l/I)</span>
+                  </label>
+                </div>
+                
+                <div class="form-group">
+                  <button id="test-generate-password" class="btn-secondary">Тестовая генерация</button>
+                  <div id="test-password-result" class="test-password-result" style="display: none;"></div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Белый список сайтов -->
+            <div class="subsection">
+              <h3>Белый список сайтов</h3>
+              <p class="subsection-description">Сайты из белого списка будут игнорироваться расширением.</p>
+              
+              <div class="whitelist-container">
+                <div class="add-site-form">
+                  <input type="text" id="site-input" class="site-input" placeholder="example.com или *.example.com">
+                  <button id="add-site-btn" class="btn-secondary">Добавить</button>
+                </div>
+                
+                <div id="whitelist-list" class="whitelist-list">
+                  <div class="empty-state">Нет сайтов в белом списке</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Раздел: Сохранённые пароли -->
+        <section id="saved-passwords-section" class="content-section">
+          <div class="section-header">
+            <h2>Сохранённые пароли</h2>
+            <p class="section-description">Просмотр и редактирование всех сохранённых паролей</p>
+          </div>
+
+          <div class="section-content">
+            <div class="passwords-management">
+              <div id="passwords-pin-required" class="info-box" style="display: none;">
+                <p>Для просмотра и редактирования паролей требуется ввести PIN-код.</p>
+                <div class="form-group" style="margin-top: 16px;">
+                  <label for="passwords-view-pin">PIN-код:</label>
+                  <input type="password" id="passwords-view-pin" class="pin-input" maxlength="12" placeholder="••••••" autocomplete="off">
+                </div>
+                <button id="verify-pin-for-passwords-btn" class="btn-primary" style="margin-top: 12px;">Продолжить</button>
+                <div id="passwords-pin-error" class="error-message" style="display: none; margin-top: 12px;"></div>
+              </div>
+
+              <div id="passwords-list-container" style="display: none;">
+                <div class="passwords-toolbar">
+                  <input type="text" id="passwords-search" class="text-input" placeholder="Поиск по сайту, логину или URL..." style="max-width: 400px;">
+                  <select id="category-filter" class="text-input" style="max-width: 200px;">
+                    <option value="">Все категории</option>
+                  </select>
+                  <input type="text" id="new-category-input" class="text-input" placeholder="Новая категория..." style="max-width: 150px;">
+                  <button id="add-category-btn" class="btn-secondary">+</button>
+                  <select id="tag-filter" class="text-input" style="max-width: 200px;">
+                    <option value="">Все теги</option>
+                  </select>
+                  <button id="add-password-btn" class="btn-primary">Добавить</button>
+                  <button id="refresh-passwords-btn" class="btn-secondary">Обновить</button>
+                  <button id="find-duplicates-btn" class="btn-secondary">Найти дубликаты</button>
+                </div>
+                
+                <div id="duplicates-warning" class="duplicates-warning" style="display: none;"></div>
+                
+                <div id="passwords-table-container" class="passwords-table-container">
+                  <div class="empty-state">Загрузка паролей...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Раздел: Данные -->
+        <section id="data-section" class="content-section">
+          <div class="section-header">
+            <h2>Данные</h2>
+            <p class="section-description">Управление персональными данными для автозаполнения форм</p>
+          </div>
+
+          <div class="section-content">
+            <div class="data-management">
+              <div id="data-pin-required" class="info-box" style="display: none;">
+                <p>Для просмотра и редактирования данных требуется ввести PIN-код.</p>
+                <div class="form-group" style="margin-top: 16px;">
+                  <label for="data-view-pin">PIN-код:</label>
+                  <input type="password" id="data-view-pin" class="pin-input" maxlength="12" placeholder="••••••" autocomplete="off">
+                </div>
+                <button id="verify-pin-for-data-btn" class="btn-primary" style="margin-top: 12px;">Продолжить</button>
+                <div id="data-pin-error" class="error-message" style="display: none; margin-top: 12px;"></div>
+              </div>
+
+              <div id="data-list-container" style="display: none;">
+                <div class="data-toolbar">
+                  <input type="text" id="data-search" class="text-input" placeholder="Поиск по ФИО, телефону, почте..." style="max-width: 400px;">
+                  <select id="data-category-filter" class="text-input" style="max-width: 200px;">
+                    <option value="">Все категории</option>
+                  </select>
+                  <input type="text" id="new-data-category-input" class="text-input" placeholder="Новая категория..." style="max-width: 150px;">
+                  <button id="add-data-category-btn" class="btn-secondary">+</button>
+                  <select id="data-tag-filter" class="text-input" style="max-width: 200px;">
+                    <option value="">Все теги</option>
+                  </select>
+                  <button id="add-data-btn" class="btn-primary">Добавить карточку</button>
+                  <button id="refresh-data-btn" class="btn-secondary">Обновить</button>
+                </div>
+                
+                <div id="data-table-container" class="passwords-table-container">
+                  <div class="empty-state">Загрузка данных...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Раздел: Безопасность -->
+        <section id="security-section" class="content-section">
+          <div class="section-header">
+            <h2>Безопасность</h2>
+            <p class="section-description">Управление PIN-кодом для шифрования паролей</p>
+          </div>
+
+          <div class="section-content">
+            <!-- Настройка PIN-кода -->
+            <div id="pin-setup" class="pin-setup">
+              <div class="form-group">
+                <label for="pin-input">Введите PIN-код (6-12 символов):</label>
+                <input type="password" id="pin-input" class="pin-input" maxlength="12" placeholder="••••••">
+                <div class="input-hint">Цифры и буквы, минимум одна цифра и одна буква</div>
+              </div>
+              
+              <div class="form-group">
+                <label for="pin-confirm">Подтвердите PIN-код:</label>
+                <input type="password" id="pin-confirm" class="pin-input" maxlength="12" placeholder="••••••">
+              </div>
+              
+              <div id="pin-error" class="error-message" style="display: none;"></div>
+              
+              <button id="save-pin-btn" class="btn-primary">Сохранить PIN-код</button>
+            </div>
+
+            <!-- Изменение PIN-кода -->
+            <div id="pin-change" class="pin-change" style="display: none;">
+              <div class="info-box">
+                <p>PIN-код установлен. Вы можете изменить его, введя текущий PIN-код.</p>
+              </div>
+              
+              <div class="form-group">
+                <label for="current-pin">Текущий PIN-код:</label>
+                <input type="password" id="current-pin" class="pin-input" maxlength="12" placeholder="••••••">
+              </div>
+              
+              <div class="form-group">
+                <label for="new-pin-input">Новый PIN-код (6-12 символов):</label>
+                <input type="password" id="new-pin-input" class="pin-input" maxlength="12" placeholder="••••••">
+                <div class="input-hint">Цифры и буквы, минимум одна цифра и одна буква</div>
+              </div>
+              
+              <div class="form-group">
+                <label for="new-pin-confirm">Подтвердите новый PIN-код:</label>
+                <input type="password" id="new-pin-confirm" class="pin-input" maxlength="12" placeholder="••••••">
+              </div>
+              
+              <div id="pin-change-error" class="error-message" style="display: none;"></div>
+              
+              <button id="change-pin-btn" class="btn-primary">Изменить PIN-код</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Раздел: Экспорт и Импорт -->
+        <section id="export-import-section" class="content-section">
+          <div class="section-header">
+            <h2>Экспорт и Импорт</h2>
+            <p class="section-description">Экспортируйте или импортируйте ваши пароли в зашифрованном формате</p>
+          </div>
+
+          <div class="section-content">
+            <div class="export-import-section">
+              <div class="form-group">
+                <label for="export-pin">PIN-код для экспорта:</label>
+                <input type="password" id="export-pin" class="pin-input" maxlength="12" placeholder="••••••" autocomplete="off">
+              </div>
+              
+              <button id="export-btn" class="btn-primary">Экспорт паролей</button>
+              
+              <div class="divider"></div>
+              
+              <div class="form-group">
+                <label for="import-pin">PIN-код для импорта:</label>
+                <input type="password" id="import-pin" class="pin-input" maxlength="12" placeholder="••••••" autocomplete="off">
+              </div>
+              
+              <div class="file-input-wrapper">
+                <input type="file" id="import-file" accept=".json" style="display: none;">
+                <button id="import-btn" class="btn-secondary">Выбрать файл для импорта</button>
+                <span id="import-file-name" class="file-name"></span>
+              </div>
+              
+              <button id="import-confirm-btn" class="btn-primary" style="display: none;">Импортировать пароли</button>
+              
+              <div id="export-import-error" class="error-message" style="display: none;"></div>
+              <div id="export-import-success" class="success-message" style="display: none;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Раздел: Сведения -->
+        <section id="about-section" class="content-section">
+          <div class="section-header">
+            <h2>Сведения</h2>
+            <p class="section-description">Информация о расширении</p>
+          </div>
+
+          <div class="section-content">
+            <div class="info-section">
+              <div class="info-item">
+                <span class="info-label">Версия расширения:</span>
+                <span id="extension-version" class="info-value">1.0.0</span>
+              </div>
+              
+              <div class="info-item">
+                <span class="info-label">Репозиторий:</span>
+                <a href="https://github.com/The-Open-Tech-Company/pass-passw-browser" target="_blank" rel="noopener noreferrer" class="info-link">
+                  GitHub ↗
+                </a>
+              </div>
+              
+              <div class="info-box">
+                <p><strong>Безопасность:</strong> Все пароли шифруются с использованием AES-GCM шифрования. Ключ шифрования генерируется из вашего PIN-кода.</p>
+                <p><strong>Хранение:</strong> Все данные хранятся локально в вашем браузере и не передаются на внешние серверы.</p>
+                <p><strong>PIN-код:</strong> Запомните ваш PIN-код! Без него вы не сможете получить доступ к сохранённым паролям.</p>
+              </div>
+
+              <div class="reset-section">
+                <div class="divider"></div>
+                <button id="reset-btn" class="btn-danger">Сбросить все настройки</button>
+                <p class="footer-info">Создано TOTC на основе open source. 2025</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Модальное окно для добавления пароля -->
+  <div id="add-password-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Добавить пароль</h3>
+        <button class="modal-close" id="close-add-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="add-url">URL страницы входа:</label>
+          <input type="text" id="add-url" class="text-input" placeholder="https://example.com/login" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="add-username">Логин:</label>
+          <input type="text" id="add-username" class="text-input" placeholder="username или email" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="add-password">Пароль:</label>
+          <div class="password-input-wrapper">
+            <input type="password" id="add-password" class="text-input" placeholder="••••••••" autocomplete="off">
+            <button type="button" id="toggle-add-password" class="btn-toggle-password">👁️</button>
+          </div>
+          <button type="button" id="generate-add-password" class="btn-generate-password">🔑 Сгенерировать пароль</button>
+          <div id="add-password-strength" class="password-strength-indicator" style="display: none;">
+            <div class="password-strength-bar">
+              <div class="password-strength-fill" id="add-password-strength-fill"></div>
+            </div>
+            <div class="password-strength-text" id="add-password-strength-text"></div>
+            <div class="password-strength-suggestions" id="add-password-strength-suggestions"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="add-pin">Подтвердите PIN-код:</label>
+          <input type="password" id="add-pin" class="pin-input" maxlength="12" placeholder="••••••" autocomplete="off">
+        </div>
+        <div id="add-password-error" class="error-message" style="display: none;"></div>
+        <div id="add-password-success" class="success-message" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="save-add-password-btn" class="btn-primary">Сохранить</button>
+        <button id="cancel-add-password-btn" class="btn-secondary">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно для редактирования данных -->
+  <div id="edit-data-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="edit-data-modal-title">Добавить карточку данных</h3>
+        <button class="modal-close" id="close-edit-data-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="edit-lastName">Фамилия:</label>
+          <input type="text" id="edit-lastName" class="text-input" placeholder="Иванов" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-firstName">Имя:</label>
+          <input type="text" id="edit-firstName" class="text-input" placeholder="Иван" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-middleName">Отчество:</label>
+          <input type="text" id="edit-middleName" class="text-input" placeholder="Иванович" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-birthDate">Дата рождения:</label>
+          <input type="date" id="edit-birthDate" class="text-input" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-phone">Телефон:</label>
+          <input type="tel" id="edit-phone" class="text-input" placeholder="+7 (999) 123-45-67" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-email">Почта:</label>
+          <input type="email" id="edit-email" class="text-input" placeholder="example@mail.com" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-address">Адрес:</label>
+          <textarea id="edit-address" class="text-input" rows="3" placeholder="Город, улица, дом, квартира" autocomplete="off"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="edit-workplace">Место работы:</label>
+          <input type="text" id="edit-workplace" class="text-input" placeholder="Название компании" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-data-category">Категория:</label>
+          <select id="edit-data-category" class="text-input">
+            <option value="">Без категории</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="edit-data-tags">Теги (через запятую):</label>
+          <input type="text" id="edit-data-tags" class="text-input" placeholder="личное, работа" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-data-pin">Подтвердите PIN-код:</label>
+          <input type="password" id="edit-data-pin" class="pin-input" maxlength="12" placeholder="••••••" autocomplete="off">
+        </div>
+        <div id="edit-data-error" class="error-message" style="display: none;"></div>
+        <div id="edit-data-success" class="success-message" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="save-data-btn" class="btn-primary">Сохранить</button>
+        <button id="cancel-edit-data-btn" class="btn-secondary">Отмена</button>
+        <button id="delete-data-btn" class="btn-danger" style="display: none;">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно для редактирования пароля -->
+  <div id="edit-password-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Редактировать пароль</h3>
+        <button class="modal-close" id="close-edit-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="edit-domain">Домен:</label>
+          <input type="text" id="edit-domain" class="text-input" placeholder="example.com" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-url">URL страницы входа:</label>
+          <input type="text" id="edit-url" class="text-input" placeholder="https://example.com/login" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-username">Логин:</label>
+          <input type="text" id="edit-username" class="text-input" placeholder="username или email" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="edit-password">Пароль:</label>
+          <div class="password-input-wrapper">
+            <input type="password" id="edit-password" class="text-input" placeholder="••••••••" autocomplete="off">
+            <button type="button" id="toggle-edit-password" class="btn-toggle-password">👁️</button>
+          </div>
+          <button type="button" id="generate-edit-password" class="btn-generate-password">🔑 Сгенерировать пароль</button>
+          <div id="edit-password-strength" class="password-strength-indicator" style="display: none;">
+            <div class="password-strength-bar">
+              <div class="password-strength-fill" id="edit-password-strength-fill"></div>
+            </div>
+            <div class="password-strength-text" id="edit-password-strength-text"></div>
+            <div class="password-strength-suggestions" id="edit-password-strength-suggestions"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="edit-pin">Подтвердите PIN-код:</label>
+          <input type="password" id="edit-pin" class="pin-input" maxlength="12" placeholder="••••••" autocomplete="off">
+        </div>
+        <div id="edit-password-error" class="error-message" style="display: none;"></div>
+        <div id="edit-password-success" class="success-message" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="save-edit-password-btn" class="btn-primary">Сохранить</button>
+        <button id="cancel-edit-password-btn" class="btn-secondary">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="crypto-utils.js"></script>
+  <script src="password-generator.js"></script>
+  <script src="password-strength.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

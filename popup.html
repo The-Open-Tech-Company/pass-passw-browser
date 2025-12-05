@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TOTC Pass | Password Pass</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-content">
+        <h1>Менеджер паролей</h1>
+        <button id="settings-btn" class="settings-btn" title="Настройки">Настройки</button>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-button active" data-tab="saved">Сохранённые</button>
+      <button class="tab-button" data-tab="current">Текущий сайт</button>
+    </div>
+
+    <div id="saved-tab" class="tab-content active">
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Поиск по домену или логину...">
+      </div>
+      <div id="passwords-list" class="passwords-list">
+        <div class="loading">Загрузка...</div>
+      </div>
+    </div>
+
+    <div id="current-tab" class="tab-content">
+      <div id="current-site-passwords" class="passwords-list">
+        <div class="loading">Загрузка...</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="export-btn" class="btn-secondary">Экспорт</button>
+      <button id="clear-all-btn" class="btn-danger">Очистить</button>
+    </div>
+  </div>
+
+  <!-- Модальное окно для ввода PIN-кода -->
+  <div id="pin-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <h2>Введите PIN-код</h2>
+      <p class="modal-description">Требуется для доступа к паролям</p>
+      <input type="password" id="pin-modal-input" class="pin-modal-input" maxlength="12" placeholder="••••••" autofocus>
+      <div id="pin-modal-error" class="error-message" style="display: none;"></div>
+      <div class="modal-buttons">
+        <button id="pin-modal-cancel" class="btn-secondary">Отмена</button>
+        <button id="pin-modal-submit" class="btn-primary">Подтвердить</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="crypto-utils.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
+

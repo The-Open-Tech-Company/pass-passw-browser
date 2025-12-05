@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Генератор иконок</title>
+</head>
+<body>
+    <h1>Генератор иконок для расширения</h1>
+    <p>Иконки будут автоматически скачаны. Переместите их в папку icons/</p>
+    <script>
+        function createIcon(size) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Градиентный фон
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Замок
+            const lockSize = size * 0.5;
+            const lockX = (size - lockSize) / 2;
+            const lockY = size * 0.3;
+            
+            ctx.strokeStyle = '#ffffff';
+            ctx.fillStyle = '#ffffff';
+            ctx.lineWidth = Math.max(2, size / 8);
+            
+            // Дужка замка
+            ctx.beginPath();
+            ctx.arc(lockX + lockSize / 2, lockY + lockSize * 0.15, lockSize * 0.3, Math.PI, 0, false);
+            ctx.stroke();
+            
+            // Корпус замка
+            ctx.fillRect(lockX, lockY + lockSize * 0.3, lockSize, lockSize * 0.7);
+            
+            // Ключевое отверстие
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(lockX + lockSize / 2, lockY + lockSize * 0.65, lockSize * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+            
+            return canvas;
+        }
+        
+        function downloadIcon(canvas, filename) {
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        // Создаём иконки
+        setTimeout(() => {
+            downloadIcon(createIcon(16), 'icon16.png');
+        }, 500);
+        
+        setTimeout(() => {
+            downloadIcon(createIcon(48), 'icon48.png');
+        }, 1000);
+        
+        setTimeout(() => {
+            downloadIcon(createIcon(128), 'icon128.png');
+            alert('Все иконки созданы! Переместите их в папку icons/');
+        }, 1500);
+    </script>
+</body>
+</html>
+
