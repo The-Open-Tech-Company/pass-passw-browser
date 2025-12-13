@@ -28,6 +28,10 @@
             <span class="nav-icon">🛡️</span>
             <span class="nav-text">Безопасность</span>
           </button>
+          <button class="nav-item" data-section="totp">
+            <span class="nav-icon">🔐</span>
+            <span class="nav-text">2FA</span>
+          </button>
           <button class="nav-item" data-section="export-import">
             <span class="nav-icon">📤</span>
             <span class="nav-text">Экспорт и Импорт</span>
@@ -256,6 +260,87 @@
               <div id="pin-change-error" class="error-message" style="display: none;"></div>
               
               <button id="change-pin-btn" class="btn-primary">Изменить PIN-код</button>
+            </div>
+
+            <!-- Настройка биометрии -->
+            <div class="subsection" style="margin-top: 32px;">
+              <h3>Биометрическая аутентификация</h3>
+              <p class="subsection-description">Используйте Windows Hello или другие биометрические методы для разблокировки расширения</p>
+              
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="biometric-enabled">
+                  <span>Включить биометрическую разблокировку</span>
+                </label>
+                <div class="input-hint">Позволяет использовать Windows Hello или другие биометрические методы вместо ввода PIN-кода</div>
+              </div>
+              
+              <div id="biometric-status" class="info-box" style="display: none; margin-top: 16px;">
+                <p id="biometric-status-text"></p>
+              </div>
+              
+              <div id="biometric-setup-buttons" style="display: none; margin-top: 16px;">
+                <button id="setup-biometric-btn" class="btn-primary">Настроить биометрию</button>
+                <button id="remove-biometric-btn" class="btn-secondary" style="display: none;">Удалить биометрию</button>
+              </div>
+              
+              <div id="biometric-error" class="error-message" style="display: none; margin-top: 12px;"></div>
+              <div id="biometric-success" class="success-message" style="display: none; margin-top: 12px;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Модальное окно для ввода PIN при настройке биометрии -->
+        <div id="biometric-pin-modal" class="modal" style="display: none;">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Введите PIN-код</h3>
+              <button class="modal-close" id="close-biometric-pin-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+              <p>Введите PIN-код для сохранения с биометрией. PIN будет зашифрован и использоваться для разблокировки после биометрической аутентификации.</p>
+              <div class="form-group">
+                <label for="biometric-pin-input">PIN-код:</label>
+                <input type="password" id="biometric-pin-input" class="pin-input" maxlength="12" placeholder="••••••" autofocus>
+              </div>
+              <div id="biometric-pin-error" class="error-message" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+              <button id="save-biometric-pin-btn" class="btn-primary">Сохранить</button>
+              <button id="cancel-biometric-pin-btn" class="btn-secondary">Отмена</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Раздел: 2FA -->
+        <section id="totp-section" class="content-section">
+          <div class="section-header">
+            <h2>2FA</h2>
+            <p class="section-description">Управление двухфакторной аутентификацией (TOTP коды)</p>
+          </div>
+
+          <div class="section-content">
+            <div class="totp-management">
+              <div id="totp-pin-required" class="info-box" style="display: none;">
+                <p>Для просмотра и редактирования 2FA кодов требуется ввести PIN-код.</p>
+                <div class="form-group" style="margin-top: 16px;">
+                  <label for="totp-view-pin">PIN-код:</label>
+                  <input type="password" id="totp-view-pin" class="pin-input" maxlength="12" placeholder="••••••" autocomplete="off">
+                </div>
+                <button id="verify-pin-for-totp-btn" class="btn-primary" style="margin-top: 12px;">Продолжить</button>
+                <div id="totp-pin-error" class="error-message" style="display: none; margin-top: 12px;"></div>
+              </div>
+
+              <div id="totp-list-container" style="display: none;">
+                <div class="totp-toolbar">
+                  <button id="add-totp-settings-btn" class="btn-primary">+ Добавить 2FA</button>
+                  <button id="refresh-totp-btn" class="btn-secondary">Обновить</button>
+                </div>
+                
+                <div id="totp-table-container" class="passwords-table-container">
+                  <div class="empty-state">Загрузка 2FA кодов...</div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -495,9 +580,43 @@
     </div>
   </div>
 
+  <!-- Модальное окно для добавления/редактирования TOTP -->
+  <div id="totp-settings-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="totp-settings-modal-title">Добавить 2FA</h3>
+        <button class="modal-close" id="close-totp-settings-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="totp-settings-service">Название сервиса:</label>
+          <input type="text" id="totp-settings-service" class="text-input" placeholder="Например: Google, GitHub" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="totp-settings-login">Логин (для идентификации):</label>
+          <input type="text" id="totp-settings-login" class="text-input" placeholder="email@example.com или username" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="totp-settings-secret">Секретный ключ:</label>
+          <input type="text" id="totp-settings-secret" class="text-input" placeholder="Введите секретный ключ" autocomplete="off">
+          <div class="input-hint">Base32 или hex формат</div>
+        </div>
+        <div id="totp-settings-error" class="error-message" style="display: none;"></div>
+        <div id="totp-settings-success" class="success-message" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="save-totp-settings-btn" class="btn-primary">Сохранить</button>
+        <button id="cancel-totp-settings-btn" class="btn-secondary">Отмена</button>
+        <button id="delete-totp-settings-btn" class="btn-danger" style="display: none;">Удалить</button>
+      </div>
+    </div>
+  </div>
+
   <script src="crypto-utils.js"></script>
+  <script src="totp-utils.js"></script>
   <script src="password-generator.js"></script>
   <script src="password-strength.js"></script>
+  <script src="webauthn-utils.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

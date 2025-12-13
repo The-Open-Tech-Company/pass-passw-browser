@@ -16,21 +16,37 @@
     </header>
 
     <div class="tabs">
-      <button class="tab-button active" data-tab="saved">Сохранённые</button>
-      <button class="tab-button" data-tab="current">Текущий сайт</button>
+      <button class="tab-button active" data-tab="passwords">Пароли</button>
+      <button class="tab-button" data-tab="totp">2FA</button>
     </div>
 
-    <div id="saved-tab" class="tab-content active">
-      <div class="search-box">
-        <input type="text" id="search-input" placeholder="Поиск по домену или логину...">
+    <div id="passwords-tab" class="tab-content active">
+      <div class="sub-tabs">
+        <button class="sub-tab-button active" data-subtab="saved">Сохранённые</button>
+        <button class="sub-tab-button" data-subtab="current">Текущий сайт</button>
       </div>
-      <div id="passwords-list" class="passwords-list">
-        <div class="loading">Загрузка...</div>
+      
+      <div id="saved-subtab" class="sub-tab-content active">
+        <div class="search-box">
+          <input type="text" id="search-input" placeholder="Поиск по домену или логину...">
+        </div>
+        <div id="passwords-list" class="passwords-list">
+          <div class="loading">Загрузка...</div>
+        </div>
+      </div>
+
+      <div id="current-subtab" class="sub-tab-content">
+        <div id="current-site-passwords" class="passwords-list">
+          <div class="loading">Загрузка...</div>
+        </div>
       </div>
     </div>
 
-    <div id="current-tab" class="tab-content">
-      <div id="current-site-passwords" class="passwords-list">
+    <div id="totp-tab" class="tab-content">
+      <div class="totp-header">
+        <button id="add-totp-btn" class="btn-primary">+ Добавить</button>
+      </div>
+      <div id="totp-list" class="totp-list">
         <div class="loading">Загрузка...</div>
       </div>
     </div>
@@ -48,6 +64,11 @@
       <p class="modal-description">Требуется для доступа к паролям</p>
       <input type="password" id="pin-modal-input" class="pin-modal-input" maxlength="12" placeholder="••••••" autofocus>
       <div id="pin-modal-error" class="error-message" style="display: none;"></div>
+      <div id="biometric-button-container" style="display: none; margin-top: 12px; text-align: center;">
+        <button id="biometric-auth-btn" class="btn-primary" style="width: 100%;">
+          🔐 Разблокировать через биометрию
+        </button>
+      </div>
       <div class="modal-buttons">
         <button id="pin-modal-cancel" class="btn-secondary">Отмена</button>
         <button id="pin-modal-submit" class="btn-primary">Подтвердить</button>
@@ -55,7 +76,41 @@
     </div>
   </div>
 
+  <!-- Модальное окно для добавления/редактирования TOTP -->
+  <div id="totp-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="totp-modal-title">Добавить 2FA</h3>
+        <button class="modal-close" id="close-totp-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="totp-service">Название сервиса:</label>
+          <input type="text" id="totp-service" class="text-input" placeholder="Например: Google, GitHub" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="totp-login">Логин (для идентификации):</label>
+          <input type="text" id="totp-login" class="text-input" placeholder="email@example.com или username" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="totp-secret">Секретный ключ:</label>
+          <input type="text" id="totp-secret" class="text-input" placeholder="Введите секретный ключ" autocomplete="off">
+          <div class="input-hint">Base32 или hex формат</div>
+        </div>
+        <div id="totp-error" class="error-message" style="display: none;"></div>
+        <div id="totp-success" class="success-message" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="save-totp-btn" class="btn-primary">Сохранить</button>
+        <button id="cancel-totp-btn" class="btn-secondary">Отмена</button>
+        <button id="delete-totp-btn" class="btn-danger" style="display: none;">Удалить</button>
+      </div>
+    </div>
+  </div>
+
   <script src="crypto-utils.js"></script>
+  <script src="totp-utils.js"></script>
+  <script src="webauthn-utils.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

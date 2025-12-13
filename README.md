@@ -19,6 +19,8 @@ Secure password manager for Chrome/Edge browser with local encryption and PIN co
 - 📤 **Data Export** — export passwords in encrypted format with selective export control
 - 🛡️ **Whitelist** — exclude certain sites from processing
 - 🔐 **Brute-Force Protection** — lockout after 5 incorrect PIN code attempts
+- 👆 **Biometric Authentication** — unlock with Windows Hello, Touch ID, or other biometric methods
+- 🔢 **TOTP/2FA Support** — generate and manage two-factor authentication codes
 
 ## Installation
 
@@ -84,6 +86,21 @@ Open extension settings to:
 - Delete passwords
 - Control export permissions for individual passwords
 - Export passwords (only passwords with export enabled)
+
+### Biometric Authentication
+
+- **Setup**: Configure biometric authentication (Windows Hello, Touch ID, Face ID) in extension settings
+- **Unlock**: Use biometric authentication to unlock the extension instead of entering PIN code
+- **Security**: PIN code is encrypted and stored securely, accessible only via biometric verification
+- **Compatibility**: Works with WebAuthn-compatible devices and browsers
+
+### TOTP/2FA Codes
+
+- **Add 2FA Codes**: Add TOTP secrets from authenticator apps (Google Authenticator, Authy, etc.)
+- **Generate Codes**: Automatically generate 6-digit TOTP codes that update every 30 seconds
+- **Manage**: View, edit, and delete 2FA codes in the extension popup
+- **Copy**: One-click copy of 2FA codes for quick login
+- **Secure Storage**: All TOTP secrets are encrypted with your PIN code
 
 ## Security
 

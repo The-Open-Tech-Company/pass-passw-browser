@@ -9,7 +9,7 @@
 ### 1. Secure Password Storage
 
 - **Local Encryption**: All passwords are encrypted using the AES-GCM algorithm (256-bit)
-- **PIN Code Protection**: Access to passwords is protected by a PIN code from 4 to 6 digits
+- **PIN Code Protection**: Access to passwords is protected by a PIN code (6-12 characters, must contain at least one digit and one letter)
 - **Local Storage**: All data is stored only in the user's browser, without transmission to external servers
 - **Automatic Encryption**: Passwords are automatically encrypted when saved using a unique salt for each password
 
@@ -153,10 +153,51 @@
 
 ### 8. Context Menu
 
-- **Browser Integration**: Adding "Fill Login Form" item to the context menu
+- **Browser Integration**: Adding "Fill Login Form" and "Generate Password" items to the context menu
 - **Smart Processing**: Automatic detection and filling of forms on the page
+- **Password Generation**: Generate passwords directly in password fields via context menu
 
-### 13. Export and Import
+### 9. Biometric Authentication (WebAuthn)
+
+- **Platform Support**: Works with Windows Hello, Touch ID, Face ID, and other WebAuthn-compatible authenticators
+- **Setup Process**: 
+  - Enable biometric authentication in extension settings
+  - Register biometric credentials using device authenticator
+  - PIN code is encrypted and stored securely for biometric unlock
+- **Unlock Methods**:
+  - Unlock extension popup using biometric authentication
+  - Automatic biometric prompt when available
+  - Fallback to PIN code if biometric fails or is unavailable
+- **Security**:
+  - PIN code encrypted with biometric key
+  - Biometric credentials stored locally
+  - No biometric data transmitted to external servers
+- **Compatibility**: Requires WebAuthn support in browser (Chrome 67+, Edge 18+)
+
+### 10. TOTP/2FA Code Management
+
+- **TOTP Support**: Full support for Time-based One-Time Password (RFC 6238)
+- **Adding 2FA Codes**:
+  - Add TOTP secrets from authenticator apps
+  - Support for Base32 and Hex format secrets
+  - Service name and login association
+- **Code Generation**:
+  - Automatic 6-digit code generation
+  - 30-second time step (standard TOTP)
+  - Real-time code updates
+  - Visual countdown timer
+- **Management Features**:
+  - View all saved 2FA codes in extension popup
+  - Edit service name, login, and secret
+  - Delete 2FA codes
+  - One-click copy to clipboard
+- **Security**:
+  - All TOTP secrets encrypted with PIN code
+  - Secrets never stored in plain text
+  - Secure key derivation for encryption
+- **Integration**: Dedicated TOTP tab in extension popup for easy access
+
+### 11. Export and Import
 
 - **Password Export**: 
   - Format: encrypted JSON
@@ -169,21 +210,21 @@
   - Default: export enabled for all passwords
 - **Export Security**: Exported data can only be decrypted with the correct PIN code
 
-### 14. Error Handling
+### 12. Error Handling
 
 - **Validation**: Checking correctness of PIN code input, domains, data
 - **Encryption Error Handling**: Proper handling of errors during encryption/decryption
 - **Format Compatibility**: Support for old encrypted data formats
 - **Logging**: Detailed error logging for debugging
 
-### 15. Performance
+### 13. Performance
 
 - **Lazy Loading**: Passwords are loaded only when needed
 - **Caching**: Data caching to reduce storage access
 - **DOM Optimization**: Efficient DOM work through MutationObserver
 - **Minimal Impact**: Extension does not slow down browser performance
 
-### 16. Compatibility
+### 14. Compatibility
 
 - **Chrome**: Full Chrome support (Manifest V3)
 - **Edge**: Microsoft Edge compatibility
@@ -230,6 +271,12 @@
   - `passwordGeneratorSettings`: password generator configuration
   - `passwordCategories`: array of custom categories
   - `passwordTags`: array of all tags used
+  - `biometricCredentialId`: WebAuthn credential ID for biometric authentication
+  - `biometricCredentialData`: encrypted biometric credential data
+  - `biometricEnabled`: boolean flag for biometric authentication
+  - `biometricEncryptedPin`: PIN code encrypted with biometric key
+  - `biometricPinKey`: encryption key for biometric PIN
+  - `totpList`: array of encrypted TOTP secrets
 
 ### Extension API
 
@@ -239,6 +286,7 @@
 - **Chrome Notifications API**: For user notifications
 - **Chrome Context Menus API**: For context menu
 - **Web Crypto API**: For cryptographic operations
+- **WebAuthn API**: For biometric authentication
 
 ## Development and Support
 

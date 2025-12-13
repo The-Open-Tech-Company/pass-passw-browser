@@ -66,6 +66,9 @@ function clearPasswordsFromDOM() {
   }
 }
 
+let totpUpdateInterval = null;
+let editingTotpIndex = null;
+
 function initTabs() {
   const tabButtons = document.querySelectorAll('.tab-button');
   const tabContents = document.querySelectorAll('.tab-content');
@@ -80,8 +83,40 @@ function initTabs() {
       button.classList.add('active');
       document.getElementById(`${tabName}-tab`).classList.add('active');
       
-      if (tabName === 'current') {
+      if (tabName === 'passwords') {
+        initSubTabs();
+        loadPasswords();
+      } else if (tabName === 'totp') {
+        loadTotpCodes();
+        startTotpUpdate();
+      } else {
+        stopTotpUpdate();
+      }
+    });
+  });
+  
+  // Инициализируем подвкладки для паролей
+  initSubTabs();
+}
+
+function initSubTabs() {
+  const subTabButtons = document.querySelectorAll('.sub-tab-button');
+  const subTabContents = document.querySelectorAll('.sub-tab-content');
+
+  subTabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const subTabName = button.dataset.subtab;
+      
+      subTabButtons.forEach(btn => btn.classList.remove('active'));
+      subTabContents.forEach(content => content.classList.remove('active'));
+      
+      button.classList.add('active');
+      document.getElementById(`${subTabName}-subtab`).classList.add('active');
+      
+      if (subTabName === 'current') {
         loadCurrentSitePasswords();
+      } else if (subTabName === 'saved') {
+        loadPasswords();
       }
     });
   });
@@ -395,6 +430,7 @@ function setupEventListeners() {
   
   document.getElementById('pin-modal-submit').addEventListener('click', handlePinSubmit);
   document.getElementById('pin-modal-cancel').addEventListener('click', closePinModal);
+  document.getElementById('biometric-auth-btn').addEventListener('click', handleBiometricAuth);
   document.getElementById('pin-modal-input').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
       handlePinSubmit();
@@ -404,6 +440,19 @@ function setupEventListeners() {
   document.getElementById('pin-modal-input').addEventListener('input', (e) => {
     // Разрешаем цифры и буквы (латиница)
     e.target.value = e.target.value.replace(/[^0-9a-zA-Z]/g, '');
+  });
+  
+  // TOTP обработчики
+  document.getElementById('add-totp-btn').addEventListener('click', openAddTotpModal);
+  document.getElementById('close-totp-modal').addEventListener('click', closeTotpModal);
+  document.getElementById('cancel-totp-btn').addEventListener('click', closeTotpModal);
+  document.getElementById('save-totp-btn').addEventListener('click', saveTotp);
+  document.getElementById('delete-totp-btn').addEventListener('click', deleteTotp);
+  
+  document.getElementById('totp-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'totp-modal') {
+      closeTotpModal();
+    }
   });
 }
 
@@ -427,6 +476,32 @@ async function checkPinAndLoad() {
     return;
   }
   
+  // Проверяем, включена ли биометрия
+  // Используем небольшую задержку, чтобы окно было готово
+  try {
+    const biometricEnabled = await isBiometricEnabled();
+    const biometricRegistered = await isBiometricRegistered();
+    const biometricSupported = isWebAuthnSupported();
+    
+    if (biometricEnabled && biometricRegistered && biometricSupported) {
+      // Небольшая задержка для обеспечения готовности окна браузера
+      // Затем автоматически запускаем биометрическую аутентификацию
+      setTimeout(async () => {
+        try {
+          await attemptBiometricUnlock();
+        } catch (error) {
+          console.error('Ошибка при автоматической биометрической аутентификации:', error);
+          // При ошибке показываем обычное модальное окно
+          showPinModal();
+        }
+      }, 200);
+      return;
+    }
+  } catch (error) {
+    console.error('Ошибка при проверке биометрии:', error);
+  }
+  
+  // Если биометрия не доступна, показываем обычное модальное окно PIN
   chrome.runtime.sendMessage({ action: 'getPendingPasswords' }, (response) => {
     if (chrome.runtime.lastError) {
       console.error('Ошибка при проверке ожидающих паролей:', chrome.runtime.lastError);
@@ -450,11 +525,28 @@ async function checkPinAndLoad() {
   });
 }
 
-function showPinModal() {
+async function showPinModal() {
   const modal = document.getElementById('pin-modal');
   modal.style.display = 'flex';
   document.getElementById('pin-modal-input').focus();
   document.getElementById('pin-modal-error').style.display = 'none';
+  
+  // Проверяем, включена ли биометрия
+  try {
+    const biometricEnabled = await isBiometricEnabled();
+    const biometricRegistered = await isBiometricRegistered();
+    const biometricSupported = isWebAuthnSupported();
+    
+    const biometricContainer = document.getElementById('biometric-button-container');
+    if (biometricEnabled && biometricRegistered && biometricSupported) {
+      biometricContainer.style.display = 'block';
+    } else {
+      biometricContainer.style.display = 'none';
+    }
+  } catch (error) {
+    console.error('Ошибка при проверке биометрии:', error);
+    document.getElementById('biometric-button-container').style.display = 'none';
+  }
 }
 
 function closePinModal() {
@@ -523,6 +615,171 @@ async function handlePinSubmit() {
     errorDiv.style.display = 'block';
     pinInput.value = '';
     pinInput.focus();
+  }
+}
+
+async function attemptBiometricUnlock() {
+  try {
+    // Проверяем поддержку WebAuthn
+    if (!isWebAuthnSupported()) {
+      // Если биометрия не поддерживается, показываем обычное модальное окно
+      showPinModal();
+      return;
+    }
+    
+    // Проверяем, зарегистрирована ли биометрия
+    const credentialId = await getBiometricCredentialId();
+    if (!credentialId) {
+      // Если биометрия не настроена, показываем обычное модальное окно
+      showPinModal();
+      return;
+    }
+    
+    // Ждем немного, чтобы окно браузера было готово
+    // WebAuthn требует активное окно браузера
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Проверяем, что окно активно
+    if (document.hidden) {
+      // Если окно скрыто, показываем модальное окно
+      showPinModal();
+      return;
+    }
+    
+    // Выполняем аутентификацию через биометрию
+    const authResult = await authenticateBiometric(credentialId);
+    
+    // Если аутентификация успешна, получаем PIN из хранилища
+    const response = await chrome.runtime.sendMessage({ 
+      action: 'authenticateWithBiometric',
+      assertion: authResult.assertion,
+      challenge: authResult.challenge
+    });
+    
+    if (response && response.success) {
+      if (response.pin) {
+        // PIN получен из зашифрованного хранилища
+        currentPin = response.pin;
+        
+        chrome.runtime.sendMessage({ action: 'setSessionPin', pin: response.pin }, () => {
+          savePendingPasswords(response.pin).then(() => {
+            loadPasswordsAfterPin();
+            loadCurrentSitePasswords();
+          });
+        });
+      } else if (response.requiresPin) {
+        // Биометрия подтверждена, но PIN нужно ввести вручную
+        // Показываем модальное окно с сообщением
+        const description = document.querySelector('.modal-description');
+        if (description) {
+          description.textContent = 'Биометрия подтверждена. Введите PIN для доступа к данным.';
+        }
+        showPinModal();
+      } else {
+        // Неожиданный ответ, показываем обычное модальное окно
+        showPinModal();
+      }
+    } else {
+      // Ошибка аутентификации, показываем обычное модальное окно
+      showPinModal();
+    }
+  } catch (error) {
+    console.error('Ошибка при автоматической биометрической аутентификации:', error);
+    // При ошибке показываем обычное модальное окно
+    // Если ошибка связана с отменой пользователем или отсутствием окна, не показываем ошибку
+    const errorMessage = error.message || '';
+    if (errorMessage.includes('отменена') || 
+        errorMessage.includes('NotAllowedError') ||
+        errorMessage.includes('Could not find an active browser window') ||
+        errorMessage.includes('active browser window')) {
+      // Просто показываем модальное окно без сообщения об ошибке
+      showPinModal();
+    } else {
+      // Для других ошибок показываем сообщение
+      const errorDiv = document.getElementById('pin-modal-error');
+      if (errorDiv) {
+        errorDiv.textContent = 'Ошибка при биометрической аутентификации. Введите PIN вручную.';
+        errorDiv.style.display = 'block';
+      }
+      showPinModal();
+    }
+  }
+}
+
+async function handleBiometricAuth() {
+  const errorDiv = document.getElementById('pin-modal-error');
+  const biometricBtn = document.getElementById('biometric-auth-btn');
+  
+  errorDiv.style.display = 'none';
+  
+  try {
+    // Проверяем поддержку WebAuthn
+    if (!isWebAuthnSupported()) {
+      errorDiv.textContent = 'Биометрическая аутентификация не поддерживается в вашем браузере';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    
+    // Проверяем, зарегистрирована ли биометрия
+    const credentialId = await getBiometricCredentialId();
+    if (!credentialId) {
+      errorDiv.textContent = 'Биометрическая аутентификация не настроена. Настройте её в настройках расширения.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    
+    // Отключаем кнопку во время аутентификации
+    if (biometricBtn) {
+      biometricBtn.disabled = true;
+      biometricBtn.textContent = '⏳ Аутентификация...';
+    }
+    
+    // Выполняем аутентификацию через биометрию
+    const authResult = await authenticateBiometric(credentialId);
+    
+    // Если аутентификация успешна, получаем PIN из хранилища
+    const response = await chrome.runtime.sendMessage({ 
+      action: 'authenticateWithBiometric',
+      assertion: authResult.assertion,
+      challenge: authResult.challenge
+    });
+    
+    if (response && response.success) {
+      if (response.pin) {
+        // PIN получен из зашифрованного хранилища
+        currentPin = response.pin;
+        
+        chrome.runtime.sendMessage({ action: 'setSessionPin', pin: response.pin }, () => {
+          const modal = document.getElementById('pin-modal');
+          modal.style.display = 'none';
+          document.getElementById('pin-modal-input').value = '';
+          document.getElementById('pin-modal-error').style.display = 'none';
+          
+          savePendingPasswords(response.pin).then(() => {
+            loadPasswordsAfterPin();
+            loadCurrentSitePasswords();
+          });
+        });
+      } else if (response.requiresPin) {
+        // Биометрия подтверждена, но PIN нужно ввести вручную
+        errorDiv.textContent = 'Биометрия подтверждена. Введите PIN для доступа к данным.';
+        errorDiv.style.display = 'block';
+        document.getElementById('pin-modal-input').focus();
+      } else {
+        throw new Error('Неожиданный ответ от сервера');
+      }
+    } else {
+      throw new Error(response?.error || 'Ошибка при аутентификации');
+    }
+  } catch (error) {
+    console.error('Ошибка при биометрической аутентификации:', error);
+    errorDiv.textContent = error.message || 'Ошибка при биометрической аутентификации';
+    errorDiv.style.display = 'block';
+  } finally {
+    if (biometricBtn) {
+      biometricBtn.disabled = false;
+      biometricBtn.textContent = '🔐 Разблокировать через биометрию';
+    }
   }
 }
 
@@ -674,4 +931,314 @@ function clearAllPasswords() {
     setEmptyState('current-site-passwords', 'Нет сохранённых паролей для этого сайта');
   });
 }
+
+// TOTP функции
+async function loadTotpCodes() {
+  const container = document.getElementById('totp-list');
+  container.innerHTML = '<div class="loading">Загрузка...</div>';
+  
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getAllTotp' });
+    if (chrome.runtime.lastError) {
+      console.error('Ошибка при загрузке TOTP:', chrome.runtime.lastError);
+      setEmptyState('totp-list', 'Ошибка загрузки 2FA кодов');
+      return;
+    }
+    
+    if (response && response.totpList) {
+      renderTotpCodes(response.totpList);
+    } else {
+      setEmptyState('totp-list', 'Нет сохранённых 2FA кодов');
+    }
+  } catch (error) {
+    console.error('Ошибка при загрузке TOTP:', error);
+    setEmptyState('totp-list', 'Ошибка загрузки 2FA кодов');
+  }
+}
+
+async function renderTotpCodes(totpList) {
+  const container = document.getElementById('totp-list');
+  container.innerHTML = '';
+  
+  if (!totpList || totpList.length === 0) {
+    setEmptyState('totp-list', 'Нет сохранённых 2FA кодов');
+    return;
+  }
+  
+  for (let i = 0; i < totpList.length; i++) {
+    const totp = totpList[i];
+    const totpItem = document.createElement('div');
+    totpItem.className = 'totp-item';
+    totpItem.setAttribute('data-index', i.toString());
+    
+    try {
+      const code = await generateTOTP(totp.secret);
+      const timeRemaining = getTimeRemaining();
+      
+      totpItem.innerHTML = `
+        <div class="totp-header-info">
+          <div>
+            <div class="totp-service">${escapeHtml(totp.service || 'Без названия')}</div>
+            <div class="totp-login">${escapeHtml(totp.login || '')}</div>
+          </div>
+        </div>
+        <div class="totp-code-row">
+          <div class="totp-code" data-index="${i}">${code}</div>
+        </div>
+        <div class="totp-time" data-index="${i}">Обновится через ${timeRemaining}с</div>
+        <div class="totp-actions">
+          <button class="totp-copy-btn" data-index="${i}" data-code="${code}">Копировать</button>
+          <button class="totp-edit-btn" data-index="${i}">Редактировать</button>
+          <button class="totp-delete-btn" data-index="${i}">Удалить</button>
+        </div>
+      `;
+      
+      container.appendChild(totpItem);
+    } catch (error) {
+      console.error('Ошибка при генерации TOTP для', totp.service, error);
+      totpItem.innerHTML = `
+        <div class="totp-header-info">
+          <div>
+            <div class="totp-service">${escapeHtml(totp.service || 'Без названия')}</div>
+            <div class="totp-login">${escapeHtml(totp.login || '')}</div>
+          </div>
+        </div>
+        <div class="error-message">Ошибка генерации кода</div>
+        <div class="totp-actions">
+          <button class="totp-edit-btn" data-index="${i}">Редактировать</button>
+          <button class="totp-delete-btn" data-index="${i}">Удалить</button>
+        </div>
+      `;
+      container.appendChild(totpItem);
+    }
+  }
+  
+  // Обработчики событий
+  container.querySelectorAll('.totp-copy-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const code = e.target.getAttribute('data-code');
+      try {
+        await navigator.clipboard.writeText(code);
+        const originalText = e.target.textContent;
+        e.target.textContent = 'Скопировано';
+        e.target.style.background = '#3c3';
+        setTimeout(() => {
+          e.target.textContent = originalText;
+          e.target.style.background = '';
+        }, 2000);
+      } catch (err) {
+        console.error('Ошибка при копировании:', err);
+        alert('Не удалось скопировать код. Попробуйте ещё раз.');
+      }
+    });
+  });
+  
+  container.querySelectorAll('.totp-edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const index = parseInt(e.target.getAttribute('data-index'));
+      editTotp(index);
+    });
+  });
+  
+  container.querySelectorAll('.totp-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const index = parseInt(e.target.getAttribute('data-index'));
+      if (confirm('Вы уверены, что хотите удалить этот 2FA код?')) {
+        await deleteTotpById(index);
+      }
+    });
+  });
+}
+
+function startTotpUpdate() {
+  stopTotpUpdate();
+  totpUpdateInterval = setInterval(async () => {
+    const container = document.getElementById('totp-list');
+    if (!container) {
+      stopTotpUpdate();
+      return;
+    }
+    
+    const totpItems = container.querySelectorAll('.totp-item');
+    if (totpItems.length === 0) {
+      return;
+    }
+    
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getAllTotp' });
+      if (response && response.totpList) {
+        for (let i = 0; i < response.totpList.length; i++) {
+          const totp = response.totpList[i];
+          const codeElement = container.querySelector(`.totp-code[data-index="${i}"]`);
+          const timeElement = container.querySelector(`.totp-time[data-index="${i}"]`);
+          const copyBtn = container.querySelector(`.totp-copy-btn[data-index="${i}"]`);
+          
+          if (codeElement) {
+            try {
+              const code = await generateTOTP(totp.secret);
+              codeElement.textContent = code;
+              if (copyBtn) {
+                copyBtn.setAttribute('data-code', code);
+              }
+            } catch (error) {
+              console.error('Ошибка при обновлении TOTP:', error);
+            }
+          }
+          
+          if (timeElement) {
+            const timeRemaining = getTimeRemaining();
+            timeElement.textContent = `Обновится через ${timeRemaining}с`;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при обновлении TOTP кодов:', error);
+    }
+  }, 1000);
+}
+
+function stopTotpUpdate() {
+  if (totpUpdateInterval) {
+    clearInterval(totpUpdateInterval);
+    totpUpdateInterval = null;
+  }
+}
+
+function openAddTotpModal() {
+  editingTotpIndex = null;
+  document.getElementById('totp-modal-title').textContent = 'Добавить 2FA';
+  document.getElementById('delete-totp-btn').style.display = 'none';
+  
+  document.getElementById('totp-service').value = '';
+  document.getElementById('totp-login').value = '';
+  document.getElementById('totp-secret').value = '';
+  
+  document.getElementById('totp-error').style.display = 'none';
+  document.getElementById('totp-success').style.display = 'none';
+  
+  document.getElementById('totp-modal').style.display = 'flex';
+}
+
+function editTotp(index) {
+  editingTotpIndex = index;
+  document.getElementById('totp-modal-title').textContent = 'Редактировать 2FA';
+  document.getElementById('delete-totp-btn').style.display = 'block';
+  
+  chrome.runtime.sendMessage({ action: 'getAllTotp' }, (response) => {
+    if (response && response.totpList && response.totpList[index]) {
+      const totp = response.totpList[index];
+      document.getElementById('totp-service').value = totp.service || '';
+      document.getElementById('totp-login').value = totp.login || '';
+      document.getElementById('totp-secret').value = totp.secret || '';
+      
+      document.getElementById('totp-error').style.display = 'none';
+      document.getElementById('totp-success').style.display = 'none';
+      
+      document.getElementById('totp-modal').style.display = 'flex';
+    }
+  });
+}
+
+function closeTotpModal() {
+  document.getElementById('totp-modal').style.display = 'none';
+  editingTotpIndex = null;
+  document.getElementById('totp-service').value = '';
+  document.getElementById('totp-login').value = '';
+  document.getElementById('totp-secret').value = '';
+}
+
+async function saveTotp() {
+  const service = document.getElementById('totp-service').value.trim();
+  const login = document.getElementById('totp-login').value.trim();
+  const secret = document.getElementById('totp-secret').value.trim();
+  const errorDiv = document.getElementById('totp-error');
+  const successDiv = document.getElementById('totp-success');
+  
+  errorDiv.style.display = 'none';
+  successDiv.style.display = 'none';
+  
+  if (!service) {
+    errorDiv.textContent = 'Введите название сервиса';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  if (!login) {
+    errorDiv.textContent = 'Введите логин для идентификации';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  if (!secret) {
+    errorDiv.textContent = 'Введите секретный ключ';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  if (!isValidSecret(secret)) {
+    errorDiv.textContent = 'Неверный формат секретного ключа. Используйте Base32 или hex формат.';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: editingTotpIndex !== null ? 'updateTotp' : 'saveTotp',
+      index: editingTotpIndex,
+      service: service,
+      login: login,
+      secret: secret
+    });
+    
+    if (response && response.success) {
+      successDiv.textContent = editingTotpIndex !== null ? '2FA код успешно обновлён!' : '2FA код успешно добавлен!';
+      successDiv.style.display = 'block';
+      
+      setTimeout(async () => {
+        closeTotpModal();
+        await loadTotpCodes();
+      }, 1500);
+    } else {
+      errorDiv.textContent = response?.error || 'Ошибка при сохранении 2FA кода';
+      errorDiv.style.display = 'block';
+    }
+  } catch (error) {
+    errorDiv.textContent = 'Ошибка при сохранении 2FA кода: ' + error.message;
+    errorDiv.style.display = 'block';
+  }
+}
+
+async function deleteTotp() {
+  if (editingTotpIndex === null) return;
+  
+  if (confirm('Вы уверены, что хотите удалить этот 2FA код?')) {
+    await deleteTotpById(editingTotpIndex);
+    closeTotpModal();
+  }
+}
+
+async function deleteTotpById(index) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'deleteTotp',
+      index: index
+    });
+    
+    if (response && response.success) {
+      await loadTotpCodes();
+    } else {
+      alert('Не удалось удалить 2FA код');
+    }
+  } catch (error) {
+    console.error('Ошибка при удалении TOTP:', error);
+    alert('Ошибка при удалении 2FA кода');
+  }
+}
+
+window.addEventListener('beforeunload', () => {
+  stopTotpUpdate();
+  clearPinFromMemory();
+  clearPasswordsFromDOM();
+  passwordStore.clear();
+});
 

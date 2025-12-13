@@ -597,6 +597,85 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           sendResponse({ success: true });
           break;
           
+        case 'authenticateWithBiometric':
+          try {
+            // Проверяем, что биометрия включена и зарегистрирована
+            const biometricData = await chrome.storage.local.get(['biometricEnabled', 'biometricCredentialId']);
+            
+            if (!biometricData.biometricEnabled || !biometricData.biometricCredentialId) {
+              sendResponse({ success: false, error: 'Биометрическая аутентификация не настроена' });
+              return;
+            }
+            
+            // Проверяем, что assertion соответствует зарегистрированному ключу
+            if (request.assertion && request.assertion.id === biometricData.biometricCredentialId) {
+              // Биометрия успешно проверена
+              // Получаем зашифрованный PIN для биометрии
+              const encryptedPinData = await chrome.storage.local.get(['biometricEncryptedPin', 'biometricPinKey']);
+              
+              if (encryptedPinData.biometricEncryptedPin && encryptedPinData.biometricPinKey) {
+                try {
+                  // Расшифровываем PIN используя ключ
+                  const decryptedPin = await decryptWithKey(encryptedPinData.biometricEncryptedPin, encryptedPinData.biometricPinKey);
+                  
+                  if (decryptedPin) {
+                    // Проверяем PIN перед установкой в сессию
+                    const isValid = await verifyPin(decryptedPin);
+                    if (isValid) {
+                      // Устанавливаем PIN в сессию
+                      sessionPin = decryptedPin;
+                      resetPinTimeout();
+                      sendResponse({ success: true, pin: decryptedPin });
+                      return;
+                    }
+                  }
+                } catch (decryptError) {
+                  console.error('Ошибка при расшифровке PIN:', decryptError);
+                }
+              }
+              
+              // Если зашифрованный PIN не найден или не удалось расшифровать,
+              // возвращаем успех, но без PIN - пользователю нужно будет ввести PIN вручную
+              sendResponse({ 
+                success: true, 
+                biometricVerified: true,
+                requiresPin: true,
+                message: 'Биометрия подтверждена. Введите PIN для доступа к данным.'
+              });
+            } else {
+              sendResponse({ success: false, error: 'Неверные биометрические данные' });
+            }
+          } catch (error) {
+            console.error('Ошибка при биометрической аутентификации:', error);
+            sendResponse({ success: false, error: error.message || 'Ошибка при аутентификации' });
+          }
+          break;
+          
+        case 'saveBiometricPin':
+          try {
+            // Сохраняем PIN в зашифрованном виде для использования с биометрией
+            const pin = request.pin;
+            if (!pin) {
+              sendResponse({ success: false, error: 'PIN не предоставлен' });
+              return;
+            }
+            
+            // Генерируем ключ для шифрования PIN
+            const key = await generateTempKey();
+            const encryptedPin = await encryptWithKey(pin, key);
+            
+            await chrome.storage.local.set({
+              biometricEncryptedPin: encryptedPin,
+              biometricPinKey: key
+            });
+            
+            sendResponse({ success: true });
+          } catch (error) {
+            console.error('Ошибка при сохранении PIN для биометрии:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+          
         case 'savePendingPassword':
           try {
             const result = await chrome.storage.local.get(['pendingPasswords', 'pendingPasswordsKey']);
@@ -838,6 +917,142 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
           } catch (error) {
             console.error('Ошибка при получении карточки данных:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'getAllTotp':
+          try {
+            const pinSet = await isPinSet();
+            if (!pinSet) {
+              sendResponse({ totpList: [] });
+              return;
+            }
+            
+            let pin;
+            try {
+              pin = await getPin();
+            } catch (error) {
+              sendResponse({ totpList: [], error: 'Требуется PIN-код для получения 2FA кодов' });
+              return;
+            }
+            
+            const result = await chrome.storage.local.get(['totpList']);
+            const encryptedTotpList = result.totpList || [];
+            
+            const decryptedTotpList = [];
+            for (const encryptedTotp of encryptedTotpList) {
+              try {
+                const decryptedData = await decryptText(encryptedTotp.data, pin);
+                const totp = JSON.parse(decryptedData);
+                decryptedTotpList.push(totp);
+              } catch (error) {
+                console.error('Ошибка при расшифровке TOTP:', error);
+              }
+            }
+            
+            sendResponse({ totpList: decryptedTotpList });
+          } catch (error) {
+            console.error('Ошибка при получении TOTP кодов:', error);
+            sendResponse({ totpList: [], error: error.message });
+          }
+          break;
+          
+        case 'saveTotp':
+          try {
+            const pinSet = await isPinSet();
+            if (!pinSet) {
+              sendResponse({ success: false, error: 'PIN-код не установлен' });
+              return;
+            }
+            
+            let pin;
+            try {
+              pin = await getPin();
+            } catch (error) {
+              sendResponse({ success: false, error: 'Требуется PIN-код для сохранения 2FA кода' });
+              return;
+            }
+            
+            const result = await chrome.storage.local.get(['totpList']);
+            const encryptedTotpList = result.totpList || [];
+            
+            const totpData = {
+              service: request.service,
+              login: request.login,
+              secret: request.secret,
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            };
+            
+            const encryptedData = await encryptText(JSON.stringify(totpData), pin);
+            encryptedTotpList.push({ data: encryptedData });
+            
+            await chrome.storage.local.set({ totpList: encryptedTotpList });
+            sendResponse({ success: true });
+          } catch (error) {
+            console.error('Ошибка при сохранении TOTP:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+          
+        case 'updateTotp':
+          try {
+            const pinSet = await isPinSet();
+            if (!pinSet) {
+              sendResponse({ success: false, error: 'PIN-код не установлен' });
+              return;
+            }
+            
+            let pin;
+            try {
+              pin = await getPin();
+            } catch (error) {
+              sendResponse({ success: false, error: 'Требуется PIN-код для обновления 2FA кода' });
+              return;
+            }
+            
+            const result = await chrome.storage.local.get(['totpList']);
+            const encryptedTotpList = result.totpList || [];
+            
+            if (request.index >= 0 && request.index < encryptedTotpList.length) {
+              const oldTotpData = JSON.parse(await decryptText(encryptedTotpList[request.index].data, pin));
+              
+              const totpData = {
+                service: request.service,
+                login: request.login,
+                secret: request.secret,
+                createdAt: oldTotpData.createdAt || Date.now(),
+                updatedAt: Date.now()
+              };
+              
+              const encryptedData = await encryptText(JSON.stringify(totpData), pin);
+              encryptedTotpList[request.index] = { data: encryptedData };
+              await chrome.storage.local.set({ totpList: encryptedTotpList });
+              sendResponse({ success: true });
+            } else {
+              sendResponse({ success: false, error: '2FA код не найден' });
+            }
+          } catch (error) {
+            console.error('Ошибка при обновлении TOTP:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+          
+        case 'deleteTotp':
+          try {
+            const result = await chrome.storage.local.get(['totpList']);
+            const encryptedTotpList = result.totpList || [];
+            
+            if (request.index >= 0 && request.index < encryptedTotpList.length) {
+              encryptedTotpList.splice(request.index, 1);
+              await chrome.storage.local.set({ totpList: encryptedTotpList });
+              sendResponse({ success: true });
+            } else {
+              sendResponse({ success: false, error: '2FA код не найден' });
+            }
+          } catch (error) {
+            console.error('Ошибка при удалении TOTP:', error);
             sendResponse({ success: false, error: error.message });
           }
           break;
