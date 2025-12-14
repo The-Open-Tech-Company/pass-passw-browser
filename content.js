@@ -119,6 +119,31 @@
     return pinModal.contains(field);
   }
 
+  function hasLoginFieldOnPage() {
+    // Проверяем, есть ли на странице видимые поля для логина/email
+    const loginFields = document.querySelectorAll('input[type="email"], input[type="text"][name*="user" i], input[type="text"][name*="email" i], input[type="text"][name*="login" i], input[name*="username" i], input[id*="user" i], input[id*="email" i], input[id*="login" i], input[autocomplete="username"], input[autocomplete="email"]');
+    
+    return Array.from(loginFields).some(field => {
+      if (isPinModalField(field)) return false;
+      if (field.type === 'password') return false; // Исключаем поля пароля
+      if (field.disabled || field.readOnly) return false; // Исключаем отключенные поля
+      
+      const rect = field.getBoundingClientRect();
+      const style = window.getComputedStyle(field);
+      
+      // Проверяем видимость поля
+      const isVisible = rect.width > 0 && 
+                        rect.height > 0 && 
+                        style.display !== 'none' && 
+                        style.visibility !== 'hidden' &&
+                        style.opacity !== '0' &&
+                        rect.top >= -100 && // Поле может быть немного выше экрана
+                        rect.left >= -100;  // Поле может быть немного левее экрана
+      
+      return isVisible;
+    });
+  }
+
   async function savePasswordFromFields(passwordField, usernameField = null) {
     if (!passwordField) return;
     
@@ -136,12 +161,38 @@
         return;
       }
       
+      // Определяем, есть ли на странице поле логина/email
+      // Если нет, значит это страница только с паролем (например, Google, Яндекс после ввода логина)
+      let finalUsername = username;
+      if (!finalUsername || finalUsername === '') {
+        // Проверяем, есть ли на странице поля для логина/email
+        const hasLoginField = hasLoginFieldOnPage();
+        
+        // Если нет видимого поля логина, сохраняем без логина (будет запрошен в попапе)
+        if (!hasLoginField) {
+          finalUsername = '';
+          console.log('[TOTC Pass | Password Pass] Обнаружена страница только с паролем, сохраняем без логина');
+        } else {
+          finalUsername = 'unknown';
+        }
+      }
+      
+      // Проверяем, не сохраняли ли мы уже этот пароль недавно (защита от повторного сохранения)
+      const saveKey = `${domain}_${finalUsername}_${password}`;
+      const lastSaveTime = passwordField.dataset.lastSaveTime;
+      const now = Date.now();
+      
+      if (lastSaveTime && (now - parseInt(lastSaveTime)) < 5000) {
+        // Сохраняли менее 5 секунд назад, пропускаем
+        return;
+      }
+      
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({
           action: 'savePendingPassword',
           domain: domain,
           url: window.location.href,
-          username: username || 'unknown',
+          username: finalUsername,
           password: password
         }, (response) => {
           if (chrome.runtime.lastError) {
@@ -149,6 +200,8 @@
             return;
           }
           if (response && response.success) {
+            // Сохраняем время последнего сохранения
+            passwordField.dataset.lastSaveTime = now.toString();
             chrome.runtime.sendMessage({ action: 'openPopup' }, () => {});
             chrome.runtime.sendMessage({
               action: 'showNotification',
@@ -175,7 +228,16 @@
       return;
     }
 
-    await savePasswordFromFields(fields.password, fields.username);
+    // Проверяем, есть ли поле логина на странице
+    const hasLoginField = hasLoginFieldOnPage();
+    const hasUsernameField = fields.username && fields.username.value.trim().length > 0;
+    
+    // Если нет поля логина на странице и нет значения в поле username, сохраняем без логина
+    if (!hasLoginField && !hasUsernameField) {
+      await savePasswordFromFields(fields.password, null);
+    } else {
+      await savePasswordFromFields(fields.password, fields.username);
+    }
   }
 
   function showPinModalOnPage(callback) {
@@ -715,7 +777,16 @@
           setTimeout(async () => {
             const fields = findPasswordFields(container);
             if (fields && fields.password && fields.password.value.trim()) {
-              await savePasswordFromFields(fields.password, fields.username);
+              // Проверяем, есть ли поле логина на странице
+              const hasLoginField = hasLoginFieldOnPage();
+              const hasUsernameField = fields.username && fields.username.value.trim().length > 0;
+              
+              // Если нет поля логина на странице и нет значения в поле username, сохраняем без логина
+              if (!hasLoginField && !hasUsernameField) {
+                await savePasswordFromFields(fields.password, null);
+              } else {
+                await savePasswordFromFields(fields.password, fields.username);
+              }
             }
           }, 100);
         }
@@ -758,8 +829,44 @@
       };
       
       if (!passwordField.dataset.passwordManagerInputHandler) {
+        // Отслеживаем ввод пароля для автоматического сохранения
+        let saveTimeout = null;
+        const handlePasswordSave = async () => {
+          const fields = findPasswordFields(container);
+          if (fields && fields.password && fields.password.value.trim().length >= 3) {
+            // Проверяем, есть ли поле логина на странице
+            const hasLoginField = hasLoginFieldOnPage();
+            const hasUsernameField = fields.username && fields.username.value.trim().length > 0;
+            
+            // Если нет поля логина на странице и нет значения в поле username, это страница только с паролем
+            if (!hasLoginField && !hasUsernameField) {
+              // Сохраняем пароль без логина
+              await savePasswordFromFields(fields.password, null);
+            }
+          }
+        };
+        
         passwordField.addEventListener('input', trackPassword);
         passwordField.addEventListener('change', trackPassword);
+        
+        // Сохраняем при потере фокуса (blur)
+        passwordField.addEventListener('blur', () => {
+          if (saveTimeout) {
+            clearTimeout(saveTimeout);
+          }
+          saveTimeout = setTimeout(handlePasswordSave, 500);
+        });
+        
+        // Сохраняем при нажатии Enter
+        passwordField.addEventListener('keydown', async (e) => {
+          if (e.key === 'Enter') {
+            if (saveTimeout) {
+              clearTimeout(saveTimeout);
+            }
+            await handlePasswordSave();
+          }
+        });
+        
         passwordField.dataset.passwordManagerInputHandler = 'true';
       }
       

@@ -116,9 +116,10 @@ function clearPinSafely() {
       clearTimeout(pinTimeoutId);
       pinTimeoutId = null;
     }
-    if (global.gc && typeof global.gc === 'function') {
+    const gcFn = (typeof globalThis !== 'undefined' && globalThis.gc) ? globalThis.gc : null;
+    if (typeof gcFn === 'function') {
       try {
-        global.gc();
+        gcFn();
       } catch (e) {
       }
     }
@@ -216,14 +217,16 @@ async function savePassword(domain, url, username, password) {
 
     await chrome.storage.local.set({ passwords: passwords });
     
-    const sanitizedUsername = escapeHtml(username);
+    const sanitizedUsername = escapeHtml(username || '(без логина)');
     const sanitizedDomain = escapeHtml(domain);
     
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon48.png',
       title: 'Пароль сохранён',
-      message: `Пароль для ${sanitizedUsername} на ${sanitizedDomain} успешно сохранён`
+      message: username ? 
+        `Пароль для ${sanitizedUsername} на ${sanitizedDomain} успешно сохранён` :
+        `Пароль для ${sanitizedDomain} успешно сохранён (без логина)`
     }).catch(() => {});
 
     return { success: true };
@@ -543,9 +546,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           break;
           
         case 'setSessionPin':
-          sessionPin = request.pin;
-          resetPinTimeout();
-          sendResponse({ success: true });
+          try {
+            const isPinValid = await verifyPin(request.pin);
+            if (!isPinValid) {
+              sendResponse({ success: false, error: 'Неверный PIN-код' });
+              return;
+            }
+            sessionPin = request.pin;
+            resetPinTimeout();
+            sendResponse({ success: true });
+          } catch (error) {
+            sendResponse({ success: false, error: error.message || 'Ошибка при установке PIN-кода' });
+          }
           break;
           
         case 'checkSessionPin':

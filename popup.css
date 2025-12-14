@@ -790,3 +790,8 @@ header h1 {
   text-align: center;
 }
 
+#username-modal-domain {
+  font-weight: 600;
+  color: #333;
+}
+

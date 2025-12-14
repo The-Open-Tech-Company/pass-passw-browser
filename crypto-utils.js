@@ -177,14 +177,54 @@ async function isPinSet() {
   }
 }
 
-async function savePinHash(pin) {
+const PIN_SALT_LEN = 16;
+const PIN_PBKDF2_ITERATIONS = 200000;
+const PIN_HASH_VERSION = 'pbkdf2-v1';
+
+function bytesToBase64(bytes) {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function base64ToBytes(str) {
+  return Uint8Array.from(atob(str), c => c.charCodeAt(0));
+}
+
+async function computePinHash(pin, salt, iterations = PIN_PBKDF2_ITERATIONS) {
   const encoder = new TextEncoder();
-  const data = encoder.encode(pin);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  
-  await chrome.storage.local.set({ pinHash: hashHex });
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(pin),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt,
+      iterations,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    256
+  );
+
+  const hashArray = Array.from(new Uint8Array(derivedBits));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function savePinHash(pin) {
+  const salt = crypto.getRandomValues(new Uint8Array(PIN_SALT_LEN));
+  const hashHex = await computePinHash(pin, salt);
+
+  await chrome.storage.local.set({
+    pinHash: hashHex,
+    pinSalt: bytesToBase64(salt),
+    pinHashAlg: PIN_HASH_VERSION,
+    pinAttempts: 0,
+    pinLockedUntil: null
+  });
 }
 
 // Защита от timing-атак: постоянное время выполнения
@@ -218,50 +258,63 @@ function constantTimeCompare(a, b) {
 }
 
 async function verifyPin(pin) {
-  // Всегда выполняем хеширование для защиты от timing-атак
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pin);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  
   try {
-    const result = await chrome.storage.local.get(['pinHash', 'pinAttempts', 'pinLockedUntil']);
-    
-    // Если PIN не установлен, все равно выполняем проверку для защиты от timing-атак
-    const storedHash = result.pinHash || '0'.repeat(64); // Dummy hash для постоянного времени
-    
+    const result = await chrome.storage.local.get(['pinHash', 'pinSalt', 'pinHashAlg', 'pinAttempts', 'pinLockedUntil']);
+
+    // Если PIN не установлен, имитируем проверку для защиты от timing-атак
+    const storedHash = result.pinHash || '0'.repeat(64);
+
     if (result.pinLockedUntil && Date.now() < result.pinLockedUntil) {
       const minutesLeft = Math.ceil((result.pinLockedUntil - Date.now()) / 60000);
       throw new Error(`PIN-код заблокирован. Попробуйте через ${minutesLeft} мин.`);
     }
-    
-    // Используем constant-time сравнение для защиты от timing-атак
-    const isValid = constantTimeCompare(hashHex, storedHash) && result.pinHash;
-    
-    // Всегда выполняем одинаковые операции для защиты от timing-атак
+
+    let isValid = false;
+
+    if (result.pinSalt && result.pinHashAlg === PIN_HASH_VERSION) {
+      try {
+        const salt = base64ToBytes(result.pinSalt);
+        const hashHex = await computePinHash(pin, salt);
+        isValid = constantTimeCompare(hashHex, storedHash) && !!result.pinHash;
+      } catch (e) {
+        isValid = false;
+      }
+    } else {
+      // Legacy SHA-256 без соли
+      const encoder = new TextEncoder();
+      const data = encoder.encode(pin);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const legacyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      isValid = constantTimeCompare(legacyHash, storedHash) && !!result.pinHash;
+
+      // Миграция на PBKDF2 при успешной проверке
+      if (isValid) {
+        await savePinHash(pin);
+      }
+    }
+
     const attempts = (result.pinAttempts || 0) + (isValid ? 0 : 1);
     const maxAttempts = 5;
-    
+
     if (isValid) {
       await chrome.storage.local.set({ pinAttempts: 0, pinLockedUntil: null });
       return true;
-    } else {
-      if (attempts >= maxAttempts) {
-        // При 5 неверных попытках удаляем все пароли в целях безопасности
-        await chrome.storage.local.set({ 
-          passwords: {},
-          pendingPasswords: [],
-          pendingPasswordsKey: null,
-          pinAttempts: attempts,
-          pinLockedUntil: null
-        });
-        throw new Error('Превышено количество попыток. Все пароли удалены в целях безопасности.');
-      } else {
-        await chrome.storage.local.set({ pinAttempts: attempts });
-        return false;
-      }
     }
+
+    if (attempts >= maxAttempts) {
+      await chrome.storage.local.set({ 
+        passwords: {},
+        pendingPasswords: [],
+        pendingPasswordsKey: null,
+        pinAttempts: attempts,
+        pinLockedUntil: null
+      });
+      throw new Error('Превышено количество попыток. Все пароли удалены в целях безопасности.');
+    }
+
+    await chrome.storage.local.set({ pinAttempts: attempts });
+    return false;
   } catch (error) {
     if (error.message && (error.message.includes('заблокирован') || error.message.includes('Попробуйте'))) {
       throw error;

@@ -1058,23 +1058,78 @@ function readFileAsText(file) {
 }
 
 async function hashPin(pin) {
+  // Сохраняем совместимость: без соли возвращаем legacy SHA-256
   const encoder = new TextEncoder();
   const data = encoder.encode(pin);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function verifyPin(pin) {
   try {
-    const result = await chrome.storage.local.get(['pinHash']);
-    if (!result.pinHash) {
+    const { pinHash, pinSalt, pinHashAlg } = await chrome.storage.local.get(['pinHash', 'pinSalt', 'pinHashAlg']);
+    if (!pinHash) {
       return false;
     }
-    
-    const pinHash = await hashPin(pin);
-    return pinHash === result.pinHash;
+
+    const PIN_PBKDF2_ITERATIONS = 200000;
+
+    const base64ToBytes = (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0));
+
+    const constantTimeCompare = (a, b) => {
+      if (typeof a !== 'string' || typeof b !== 'string') return false;
+      const maxLen = Math.max(a.length, b.length);
+      let res = 0;
+      for (let i = 0; i < maxLen; i++) {
+        const ac = i < a.length ? a.charCodeAt(i) : 0;
+        const bc = i < b.length ? b.charCodeAt(i) : 0;
+        res |= ac ^ bc;
+      }
+      if (a.length !== b.length) res |= 1;
+      return res === 0;
+    };
+
+    const computePinHash = async (pinValue, saltBytes) => {
+      const encoder = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(pinValue),
+        'PBKDF2',
+        false,
+        ['deriveBits']
+      );
+      const derivedBits = await crypto.subtle.deriveBits(
+        {
+          name: 'PBKDF2',
+          salt: saltBytes,
+          iterations: PIN_PBKDF2_ITERATIONS,
+          hash: 'SHA-256'
+        },
+        keyMaterial,
+        256
+      );
+      const hashArray = Array.from(new Uint8Array(derivedBits));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    };
+
+    let isValid = false;
+
+    if (pinSalt && pinHashAlg === 'pbkdf2-v1') {
+      const saltBytes = base64ToBytes(pinSalt);
+      const computed = await computePinHash(pin, saltBytes);
+      isValid = constantTimeCompare(computed, pinHash);
+    } else {
+      // Legacy SHA-256 без соли
+      const legacyHash = await hashPin(pin);
+      isValid = constantTimeCompare(legacyHash, pinHash);
+      if (isValid) {
+        // Мигрируем на PBKDF2 через фоновые утилиты
+        await savePinHash(pin);
+      }
+    }
+
+    return isValid;
   } catch (error) {
     console.error('Ошибка при проверке PIN:', error);
     return false;
@@ -1481,17 +1536,44 @@ async function showDuplicatePasswords() {
     return;
   }
   
-  let html = '<h4>⚠️ Обнаружены дублирующиеся пароли:</h4><ul>';
+  warningDiv.textContent = '';
+
+  const title = document.createElement('h4');
+  title.textContent = '⚠️ Обнаружены дублирующиеся пароли:';
+  warningDiv.appendChild(title);
+
+  const list = document.createElement('ul');
+
   duplicates.forEach(dup => {
-    html += `<li><strong>Пароль:</strong> ${dup.password} используется на ${dup.count} сайтах:<ul>`;
+    const li = document.createElement('li');
+
+    const strong = document.createElement('strong');
+    strong.textContent = 'Пароль:';
+    li.appendChild(strong);
+
+    const text = document.createTextNode(` ${dup.password} используется на ${dup.count} сайтах:`);
+    li.appendChild(text);
+
+    const innerList = document.createElement('ul');
     dup.entries.forEach(entry => {
-      html += `<li>${entry.domain} - ${entry.username}</li>`;
+      const entryLi = document.createElement('li');
+      entryLi.textContent = `${entry.domain} - ${entry.username}`;
+      innerList.appendChild(entryLi);
     });
-    html += '</ul></li>';
+
+    li.appendChild(innerList);
+    list.appendChild(li);
   });
-  html += '</ul><p><strong>Рекомендация:</strong> Используйте уникальные пароли для каждого сайта.</p>';
-  
-  warningDiv.innerHTML = html;
+
+  warningDiv.appendChild(list);
+
+  const recommendation = document.createElement('p');
+  const strongRec = document.createElement('strong');
+  strongRec.textContent = 'Рекомендация:';
+  recommendation.appendChild(strongRec);
+  recommendation.appendChild(document.createTextNode(' Используйте уникальные пароли для каждого сайта.'));
+  warningDiv.appendChild(recommendation);
+
   warningDiv.style.display = 'block';
   warningDiv.className = 'duplicates-warning';
 }

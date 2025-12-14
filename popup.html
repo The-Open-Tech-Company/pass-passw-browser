@@ -108,6 +108,28 @@
     </div>
   </div>
 
+  <!-- Модальное окно для ввода логина при сохранении пароля -->
+  <div id="username-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Введите логин</h3>
+        <button class="modal-close" id="close-username-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="username-input">Логин для сайта <span id="username-modal-domain"></span>:</label>
+          <input type="text" id="username-input" class="text-input" placeholder="email@example.com или username" autocomplete="off">
+          <div class="input-hint">Оставьте пустым, чтобы сохранить без логина</div>
+        </div>
+        <div id="username-modal-error" class="error-message" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="save-without-username-btn" class="btn-secondary">Сохранить без логина</button>
+        <button id="save-username-btn" class="btn-primary">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
   <script src="crypto-utils.js"></script>
   <script src="totp-utils.js"></script>
   <script src="webauthn-utils.js"></script>

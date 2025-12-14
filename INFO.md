@@ -292,16 +292,29 @@
 
 ### Version
 
-- **Current Version**: 2.1.0
+- **Current Version**: 2.3.0
 - **Manifest Version**: 3
+- **Release Date**: 2025
+
+### Changelog
+
+For a complete list of changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 ### License
 
-The project is created based on open source and is available under the corresponding license.
+This project is released into the public domain. See [LICENSE](../LICENSE) for details.
 
 ### Repository
 
 GitHub: https://github.com/The-Open-Tech-Company/pass-passw-browser
+
+### Contributing
+
+We welcome contributions! Please see the main [README.md](../README.md) for contribution guidelines.
+
+### Security
+
+If you discover a security vulnerability, please do not create a public issue. Instead, please contact the maintainers directly.
 
 ---
 

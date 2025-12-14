@@ -269,7 +269,7 @@ function renderPasswords(passwords, containerId = 'passwords-list') {
     
     const usernameDiv = document.createElement('div');
     usernameDiv.className = 'username';
-    usernameDiv.textContent = item.username || '';
+    usernameDiv.textContent = item.username || '(без логина)';
     
     const passwordRow = document.createElement('div');
     passwordRow.className = 'password-row';
@@ -452,6 +452,23 @@ function setupEventListeners() {
   document.getElementById('totp-modal').addEventListener('click', (e) => {
     if (e.target.id === 'totp-modal') {
       closeTotpModal();
+    }
+  });
+  
+  // Обработчики для модального окна ввода логина
+  document.getElementById('close-username-modal').addEventListener('click', closeUsernameModal);
+  document.getElementById('save-username-btn').addEventListener('click', handleSaveUsername);
+  document.getElementById('save-without-username-btn').addEventListener('click', handleSaveWithoutUsername);
+  
+  document.getElementById('username-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'username-modal') {
+      closeUsernameModal(true);
+    }
+  });
+  
+  document.getElementById('username-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      handleSaveUsername();
     }
   });
 }
@@ -783,6 +800,141 @@ async function handleBiometricAuth() {
   }
 }
 
+let currentPendingPassword = null;
+let pendingPasswordsQueue = [];
+let pendingPasswordsResolve = null;
+
+function showUsernameModal(pendingPassword) {
+  currentPendingPassword = pendingPassword;
+  document.getElementById('username-modal-domain').textContent = pendingPassword.domain;
+  document.getElementById('username-input').value = '';
+  document.getElementById('username-modal-error').style.display = 'none';
+  document.getElementById('username-modal').style.display = 'flex';
+  setTimeout(() => {
+    document.getElementById('username-input').focus();
+  }, 100);
+}
+
+function closeUsernameModal(skipPassword = false) {
+  // Если модальное окно закрыто без сохранения, пропускаем этот пароль
+  if (skipPassword && currentPendingPassword && pendingPasswordsResolve) {
+    console.log('Модальное окно закрыто без сохранения, пропускаем пароль');
+    const passwordToSkip = currentPendingPassword;
+    currentPendingPassword = null;
+    document.getElementById('username-modal').style.display = 'none';
+    processNextPendingPassword(false);
+    return;
+  }
+  document.getElementById('username-modal').style.display = 'none';
+  currentPendingPassword = null;
+}
+
+function handleSaveUsername() {
+  const username = document.getElementById('username-input').value.trim();
+  const errorDiv = document.getElementById('username-modal-error');
+  
+  errorDiv.style.display = 'none';
+  
+  if (currentPendingPassword) {
+    savePasswordWithUsername(currentPendingPassword, username);
+  }
+  closeUsernameModal();
+}
+
+function handleSaveWithoutUsername() {
+  if (currentPendingPassword) {
+    savePasswordWithUsername(currentPendingPassword, '');
+  }
+  closeUsernameModal();
+}
+
+function savePasswordWithUsername(pendingPassword, username) {
+  if (!pendingPasswordsResolve) return;
+  
+  chrome.runtime.sendMessage({
+    action: 'savePassword',
+    domain: pendingPassword.domain,
+    url: pendingPassword.url,
+    username: username || '',
+    password: pendingPassword.password
+  }, (saveResponse) => {
+    if (chrome.runtime.lastError) {
+      console.error('Ошибка при отправке сообщения savePassword:', chrome.runtime.lastError);
+      processNextPendingPassword(false);
+      return;
+    }
+    
+    if (saveResponse && saveResponse.success) {
+      console.log(`Пароль успешно сохранён для ${pendingPassword.domain}, логин: ${username || '(без логина)'}`);
+      processNextPendingPassword(true);
+    } else {
+      console.error('Ошибка при сохранении пароля:', saveResponse?.error);
+      processNextPendingPassword(false);
+    }
+  });
+}
+
+function processNextPendingPassword(success) {
+  if (!pendingPasswordsResolve) return;
+  
+  // Учитываем результат предыдущего сохранения (если был)
+  if (success !== undefined) {
+    if (success) {
+      pendingPasswordsQueue.savedCount = (pendingPasswordsQueue.savedCount || 0) + 1;
+    } else {
+      pendingPasswordsQueue.failedCount = (pendingPasswordsQueue.failedCount || 0) + 1;
+    }
+  }
+  
+  if (pendingPasswordsQueue.currentIndex >= pendingPasswordsQueue.passwords.length) {
+    // Все пароли обработаны
+    console.log(`Сохранение завершено: успешно ${pendingPasswordsQueue.savedCount || 0}, ошибок ${pendingPasswordsQueue.failedCount || 0}`);
+    chrome.runtime.sendMessage({ action: 'clearPendingPasswords' }, () => {});
+    
+    if (pendingPasswordsQueue.savedCount > 0) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon48.png',
+        title: 'Пароли сохранены',
+        message: `Успешно сохранено паролей: ${pendingPasswordsQueue.savedCount}`
+      }).catch(() => {});
+    }
+    
+    if (pendingPasswordsQueue.failedCount > 0) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon48.png',
+        title: 'Ошибка сохранения',
+        message: `Не удалось сохранить ${pendingPasswordsQueue.failedCount} паролей`
+      }).catch(() => {});
+    }
+    
+    loadPasswordsAfterPin();
+    loadCurrentSitePasswords();
+    pendingPasswordsResolve();
+    pendingPasswordsResolve = null;
+    pendingPasswordsQueue = [];
+    return;
+  }
+  
+  // Обрабатываем следующий пароль
+  const pendingPassword = pendingPasswordsQueue.passwords[pendingPasswordsQueue.currentIndex];
+  pendingPasswordsQueue.currentIndex++;
+  
+  // Проверяем, нужен ли логин
+  const needsUsername = !pendingPassword.username || 
+                        pendingPassword.username === 'unknown' || 
+                        pendingPassword.username.trim() === '';
+  
+  if (needsUsername) {
+    // Показываем модальное окно для ввода логина
+    showUsernameModal(pendingPassword);
+  } else {
+    // Сохраняем сразу с существующим логином
+    savePasswordWithUsername(pendingPassword, pendingPassword.username);
+  }
+}
+
 async function savePendingPasswords(pin) {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ action: 'getPendingPasswords' }, (response) => {
@@ -816,71 +968,17 @@ async function savePendingPasswords(pin) {
         
         console.log('PIN установлен в сессию, начинаем сохранение паролей');
         
-        let savedCount = 0;
-        let failedCount = 0;
-        let currentIndex = 0;
+        // Инициализируем очередь
+        pendingPasswordsQueue = {
+          passwords: pendingPasswords,
+          currentIndex: 0,
+          savedCount: 0,
+          failedCount: 0
+        };
+        pendingPasswordsResolve = resolve;
         
-        function saveNextPassword() {
-          if (currentIndex >= pendingPasswords.length) {
-            console.log(`Сохранение завершено: успешно ${savedCount}, ошибок ${failedCount}`);
-            chrome.runtime.sendMessage({ action: 'clearPendingPasswords' }, () => {});
-            
-            if (savedCount > 0) {
-              chrome.notifications.create({
-                type: 'basic',
-                iconUrl: 'icons/icon48.png',
-                title: 'Пароли сохранены',
-                message: `Успешно сохранено паролей: ${savedCount}`
-              }).catch(() => {});
-            }
-            
-            if (failedCount > 0) {
-              chrome.notifications.create({
-                type: 'basic',
-                iconUrl: 'icons/icon48.png',
-                title: 'Ошибка сохранения',
-                message: `Не удалось сохранить ${failedCount} паролей`
-              }).catch(() => {});
-            }
-            
-            loadPasswordsAfterPin();
-            loadCurrentSitePasswords();
-            resolve();
-            return;
-          }
-          
-          const pendingPassword = pendingPasswords[currentIndex];
-          currentIndex++;
-          
-          console.log(`Сохранение пароля для ${pendingPassword.domain}, пользователь: ${pendingPassword.username}`);
-          
-          chrome.runtime.sendMessage({
-            action: 'savePassword',
-            domain: pendingPassword.domain,
-            url: pendingPassword.url,
-            username: pendingPassword.username,
-            password: pendingPassword.password
-          }, (saveResponse) => {
-            if (chrome.runtime.lastError) {
-              console.error('Ошибка при отправке сообщения savePassword:', chrome.runtime.lastError);
-              failedCount++;
-              saveNextPassword();
-              return;
-            }
-            
-            if (saveResponse && saveResponse.success) {
-              savedCount++;
-              console.log(`Пароль успешно сохранён для ${pendingPassword.domain}`);
-            } else {
-              failedCount++;
-              console.error('Ошибка при сохранении пароля:', saveResponse?.error);
-            }
-            
-            saveNextPassword();
-          });
-        }
-        
-        saveNextPassword();
+        // Начинаем обработку первого пароля
+        processNextPendingPassword();
       });
     });
   });
