@@ -210,21 +210,61 @@
   - Default: export enabled for all passwords
 - **Export Security**: Exported data can only be decrypted with the correct PIN code
 
-### 12. Error Handling
+### 12. Accessibility Features
+
+The extension includes comprehensive accessibility features to ensure inclusive use for all users:
+
+- **Epilepsy Mode**:
+  - Disables all animations and transitions
+  - Simplifies interface elements
+  - Prevents seizure triggers
+  - Automatically switches to light theme
+- **Font Size Control**:
+  - Four size options: Small, Medium, Large, Extra Large
+  - Applies to all interface elements
+  - Improves readability for users with visual impairments
+- **High Contrast Mode**:
+  - Enhanced color contrast ratios
+  - Better visibility for low vision users
+  - WCAG AA compliance
+- **Reduced Motion**:
+  - Respects system `prefers-reduced-motion` setting
+  - Disables animations and transitions
+  - Reduces motion sensitivity issues
+- **Focus Indicators**:
+  - Always-visible focus outlines
+  - Enhanced keyboard navigation support
+  - Clear visual feedback for focused elements
+- **ARIA Support**:
+  - Proper ARIA labels and roles
+  - Live regions for dynamic content announcements
+  - Screen reader compatibility
+- **Keyboard Navigation**:
+  - Full keyboard support for all features
+  - Logical tab order
+  - Keyboard shortcuts where appropriate
+- **Screen Reader Support**:
+  - Semantic HTML structure
+  - Descriptive labels and alt text
+  - Status announcements via ARIA live regions
+
+All accessibility settings are configurable in the extension settings under the "Accessibility" section and are applied immediately without page reload.
+
+### 13. Error Handling
 
 - **Validation**: Checking correctness of PIN code input, domains, data
 - **Encryption Error Handling**: Proper handling of errors during encryption/decryption
 - **Format Compatibility**: Support for old encrypted data formats
 - **Logging**: Detailed error logging for debugging
 
-### 13. Performance
+### 14. Performance
 
 - **Lazy Loading**: Passwords are loaded only when needed
 - **Caching**: Data caching to reduce storage access
 - **DOM Optimization**: Efficient DOM work through MutationObserver
 - **Minimal Impact**: Extension does not slow down browser performance
 
-### 14. Compatibility
+### 15. Compatibility
 
 - **Chrome**: Full Chrome support (Manifest V3)
 - **Edge**: Microsoft Edge compatibility
@@ -292,7 +332,7 @@
 
 ### Version
 
-- **Current Version**: 2.3.0
+- **Current Version**: 2.5.0
 - **Manifest Version**: 3
 - **Release Date**: 2025
 

@@ -21,6 +21,7 @@ Secure password manager for Chrome/Edge browser with local encryption and PIN co
 - 🔐 **Brute-Force Protection** — lockout after 5 incorrect PIN code attempts
 - 👆 **Biometric Authentication** — unlock with Windows Hello, Touch ID, or other biometric methods
 - 🔢 **TOTP/2FA Support** — generate and manage two-factor authentication codes
+- ♿ **Accessibility Features** — comprehensive accessibility options for inclusive use
 
 ## Installation
 
@@ -102,6 +103,21 @@ Open extension settings to:
 - **Copy**: One-click copy of 2FA codes for quick login
 - **Secure Storage**: All TOTP secrets are encrypted with your PIN code
 
+### Accessibility Features
+
+The extension includes comprehensive accessibility features to ensure inclusive use for all users:
+
+- **Epilepsy Mode**: Disables all animations and simplifies the interface to prevent seizures
+- **Font Size Control**: Adjustable font sizes (Small, Medium, Large, Extra Large) for better readability
+- **High Contrast Mode**: Enhanced contrast mode improves visibility for users with visual impairments
+- **Reduced Motion**: Respects system preferences and disables animations for users sensitive to motion
+- **Focus Indicators**: Always-visible focus indicators for keyboard navigation support
+- **ARIA Live Regions**: Dynamic content announcements for screen reader users
+- **Keyboard Navigation**: Full keyboard support for all interface elements
+- **Screen Reader Support**: Proper ARIA labels and roles for assistive technologies
+
+All accessibility settings can be configured in the extension settings under the "Accessibility" section.
+
 ## Security
 
 - All passwords are encrypted using AES-GCM 256-bit
@@ -138,5 +154,3 @@ For detailed information about features, see [INFO.md](INFO.md)
 ---
 
 **Created by TOTC based on open source. 2025**
-
-![Google Chrome](https://img.shields.io/badge/Google%20Chrome-4285F4?style=for-the-badge&logo=GoogleChrome&logoColor=white)

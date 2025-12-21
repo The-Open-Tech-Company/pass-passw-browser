@@ -23,10 +23,135 @@ function clearPinFromMemory() {
   chrome.runtime.sendMessage({ action: 'clearSessionPin' }, () => {});
 }
 
+// Apply theme and accessibility settings immediately
+(function() {
+  chrome.storage.sync.get(['theme', 'epilepsyMode', 'accessibilitySettings'], (result) => {
+    const theme = result.theme || 'light';
+    const epilepsy = result.epilepsyMode || false;
+    const settings = result.accessibilitySettings || {};
+    
+    const finalTheme = epilepsy ? 'light' : theme;
+    
+    document.documentElement.setAttribute('data-theme', finalTheme);
+    document.body.setAttribute('data-theme', finalTheme);
+    
+    // Check if any accessibility feature is enabled
+    const anyAccessibilityEnabled = epilepsy || settings.highContrast || settings.reducedMotion || settings.focusVisible;
+    
+    if (anyAccessibilityEnabled) {
+      document.documentElement.setAttribute('data-accessibility', 'true');
+      document.body.setAttribute('data-accessibility', 'true');
+    }
+    
+    // Apply accessibility settings
+    if (settings.fontSize) {
+      document.documentElement.setAttribute('data-font-size', settings.fontSize);
+      document.body.setAttribute('data-font-size', settings.fontSize);
+    }
+    if (settings.highContrast) {
+      document.documentElement.setAttribute('data-high-contrast', 'true');
+      document.body.setAttribute('data-high-contrast', 'true');
+    }
+    if (settings.reducedMotion) {
+      document.documentElement.setAttribute('data-reduced-motion', 'true');
+      document.body.setAttribute('data-reduced-motion', 'true');
+    }
+    if (settings.focusVisible) {
+      document.documentElement.setAttribute('data-focus-visible', 'true');
+      document.body.setAttribute('data-focus-visible', 'true');
+    }
+  });
+})();
+
 document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   setupEventListeners();
   checkPinAndLoad();
+  
+  // Listen for theme and accessibility changes
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'sync') {
+      if (changes.theme) {
+        chrome.storage.sync.get(['epilepsyMode'], (result) => {
+          if (!result.epilepsyMode) {
+            document.documentElement.setAttribute('data-theme', changes.theme.newValue);
+            document.body.setAttribute('data-theme', changes.theme.newValue);
+          }
+        });
+      }
+      
+      if (changes.epilepsyMode) {
+        const enabled = changes.epilepsyMode.newValue;
+        
+        chrome.storage.sync.get(['accessibilitySettings'], (result) => {
+          const settings = result.accessibilitySettings || {};
+          const anyAccessibilityEnabled = enabled || settings.highContrast || settings.reducedMotion || settings.focusVisible;
+          
+          if (anyAccessibilityEnabled) {
+            document.documentElement.setAttribute('data-accessibility', 'true');
+            document.body.setAttribute('data-accessibility', 'true');
+          } else {
+            document.documentElement.removeAttribute('data-accessibility');
+            document.body.removeAttribute('data-accessibility');
+          }
+        });
+        
+        if (enabled) {
+          document.documentElement.setAttribute('data-theme', 'light');
+          document.body.setAttribute('data-theme', 'light');
+        }
+      }
+      
+      if (changes.accessibilitySettings) {
+        const settings = changes.accessibilitySettings.newValue || {};
+        
+        chrome.storage.sync.get(['epilepsyMode'], (result) => {
+          const epilepsy = result.epilepsyMode || false;
+          const anyAccessibilityEnabled = epilepsy || settings.highContrast || settings.reducedMotion || settings.focusVisible;
+          
+          if (anyAccessibilityEnabled) {
+            document.documentElement.setAttribute('data-accessibility', 'true');
+            document.body.setAttribute('data-accessibility', 'true');
+          } else {
+            document.documentElement.removeAttribute('data-accessibility');
+            document.body.removeAttribute('data-accessibility');
+          }
+        });
+        
+        if (settings.fontSize) {
+          document.documentElement.setAttribute('data-font-size', settings.fontSize);
+          document.body.setAttribute('data-font-size', settings.fontSize);
+        } else {
+          document.documentElement.removeAttribute('data-font-size');
+          document.body.removeAttribute('data-font-size');
+        }
+        
+        if (settings.highContrast) {
+          document.documentElement.setAttribute('data-high-contrast', 'true');
+          document.body.setAttribute('data-high-contrast', 'true');
+        } else {
+          document.documentElement.removeAttribute('data-high-contrast');
+          document.body.removeAttribute('data-high-contrast');
+        }
+        
+        if (settings.reducedMotion) {
+          document.documentElement.setAttribute('data-reduced-motion', 'true');
+          document.body.setAttribute('data-reduced-motion', 'true');
+        } else {
+          document.documentElement.removeAttribute('data-reduced-motion');
+          document.body.removeAttribute('data-reduced-motion');
+        }
+        
+        if (settings.focusVisible) {
+          document.documentElement.setAttribute('data-focus-visible', 'true');
+          document.body.setAttribute('data-focus-visible', 'true');
+        } else {
+          document.documentElement.removeAttribute('data-focus-visible');
+          document.body.removeAttribute('data-focus-visible');
+        }
+      }
+    }
+  });
 });
 
 window.addEventListener('beforeunload', () => {

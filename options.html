@@ -36,6 +36,14 @@
             <span class="nav-icon">📤</span>
             <span class="nav-text">Экспорт и Импорт</span>
           </button>
+          <button class="nav-item" data-section="accessibility">
+            <span class="nav-icon">♿</span>
+            <span class="nav-text">Адаптация</span>
+          </button>
+          <button class="nav-item" data-section="language-theme">
+            <span class="nav-icon">🌐</span>
+            <span class="nav-text">Язык и Тема</span>
+          </button>
           <button class="nav-item" data-section="about">
             <span class="nav-icon">ℹ️</span>
             <span class="nav-text">Сведения</span>
@@ -382,6 +390,91 @@
           </div>
         </section>
 
+        <!-- Раздел: Адаптация -->
+        <section id="accessibility-section" class="content-section">
+          <div class="section-header">
+            <h2>Адаптация</h2>
+            <p class="section-description">Настройки доступности интерфейса</p>
+          </div>
+
+          <div class="section-content">
+            <div class="subsection">
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="epilepsyMode">
+                  <span>Для больных эпилепсией</span>
+                </label>
+                <div class="input-hint">Отключает все анимации и упрощает интерфейс</div>
+              </div>
+              
+              <div class="form-group">
+                <label for="fontSize">Размер шрифта:</label>
+                <select id="fontSize" class="text-input">
+                  <option value="small">Маленький</option>
+                  <option value="medium" selected>Средний</option>
+                  <option value="large">Большой</option>
+                  <option value="xlarge">Очень большой</option>
+                </select>
+                <div class="input-hint">Выберите размер шрифта для удобства чтения</div>
+              </div>
+              
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="highContrast">
+                  <span>Высокий контраст</span>
+                </label>
+                <div class="input-hint">Улучшает видимость для людей с нарушениями зрения</div>
+              </div>
+              
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="reducedMotion">
+                  <span>Уменьшить движение</span>
+                </label>
+                <div class="input-hint">Отключает анимации (следует системным настройкам)</div>
+              </div>
+              
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="focusVisible">
+                  <span>Видимый фокус</span>
+                </label>
+                <div class="input-hint">Всегда показывать индикатор фокуса для клавиатурной навигации</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Раздел: Язык и Тема -->
+        <section id="language-theme-section" class="content-section">
+          <div class="section-header">
+            <h2>Язык и Тема</h2>
+            <p class="section-description">Настройки языка интерфейса и темы оформления</p>
+          </div>
+
+          <div class="section-content">
+            <div class="subsection">
+              <div class="form-group">
+                <label>Язык интерфейса:</label>
+                <div class="lang-switcher">
+                  <button class="lang-btn active" data-lang="ru">RU</button>
+                  <button class="lang-btn" data-lang="en">EN</button>
+                </div>
+                <div class="input-hint">Выберите язык интерфейса</div>
+              </div>
+              
+              <div class="form-group">
+                <label>Тема оформления:</label>
+                <div class="lang-switcher" id="theme-switcher">
+                  <button class="lang-btn active" data-theme="light">Светлая</button>
+                  <button class="lang-btn" data-theme="dark">Тёмная</button>
+                </div>
+                <div class="input-hint">Выберите светлую или темную тему</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- Раздел: Сведения -->
         <section id="about-section" class="content-section">
           <div class="section-header">
@@ -612,6 +705,9 @@
     </div>
   </div>
 
+  <div class="save-status" id="saveStatus" role="status" aria-live="polite"></div>
+
+  <script src="i18n.js"></script>
   <script src="crypto-utils.js"></script>
   <script src="totp-utils.js"></script>
   <script src="password-generator.js"></script>

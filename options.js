@@ -5,13 +5,61 @@ let editingPassword = null;
 const passwordStore = new Map();
 let categories = [];
 let tags = [];
+let currentLanguage = 'ru';
+let currentTheme = 'light';
+let accessibilityInitialized = false;
+
+(function() {
+  chrome.storage.sync.get(['theme', 'epilepsyMode', 'accessibilitySettings'], (result) => {
+    const theme = result.theme || 'light';
+    const epilepsy = result.epilepsyMode || false;
+    const settings = result.accessibilitySettings || {};
+    
+    const finalTheme = epilepsy ? 'light' : theme;
+    
+    document.documentElement.setAttribute('data-theme', finalTheme);
+    document.body.setAttribute('data-theme', finalTheme);
+    
+    const anyAccessibilityEnabled = epilepsy || settings.highContrast || settings.reducedMotion || settings.focusVisible;
+    
+    if (anyAccessibilityEnabled) {
+      document.documentElement.setAttribute('data-accessibility', 'true');
+      document.body.setAttribute('data-accessibility', 'true');
+    }
+    
+    if (settings.fontSize) {
+      document.documentElement.setAttribute('data-font-size', settings.fontSize);
+      document.body.setAttribute('data-font-size', settings.fontSize);
+    }
+    if (settings.highContrast) {
+      document.documentElement.setAttribute('data-high-contrast', 'true');
+      document.body.setAttribute('data-high-contrast', 'true');
+    }
+    if (settings.reducedMotion) {
+      document.documentElement.setAttribute('data-reduced-motion', 'true');
+      document.body.setAttribute('data-reduced-motion', 'true');
+    }
+    if (settings.focusVisible) {
+      document.documentElement.setAttribute('data-focus-visible', 'true');
+      document.body.setAttribute('data-focus-visible', 'true');
+    }
+  });
+})();
 
 document.addEventListener('DOMContentLoaded', async () => {
+  if (typeof i18n !== 'undefined') {
+    await i18n.init();
+    currentLanguage = i18n.getCurrentLang();
+  }
+  
   await loadSettings();
   await loadPasswordGeneratorSettings();
   await loadCategoriesAndTags();
   await loadDataCategoriesAndTags();
   await loadBiometricSettings();
+  await initLanguageSwitcher();
+  await initThemeSwitcher();
+  initAccessibilityMode();
   setupEventListeners();
   setupNavigation();
   loadExtensionVersion();
@@ -104,7 +152,6 @@ function updateCategoryAndTagFilters() {
   const categoryFilter = document.getElementById('category-filter');
   const tagFilter = document.getElementById('tag-filter');
   
-  // Обновляем категории
   categoryFilter.innerHTML = '<option value="">Все категории</option>';
   categories.forEach(cat => {
     const option = document.createElement('option');
@@ -133,7 +180,6 @@ function setupEventListeners() {
   });
   document.getElementById('reset-btn').addEventListener('click', resetSettings);
   
-  // Экспорт и импорт
   document.getElementById('export-btn').addEventListener('click', exportPasswords);
   document.getElementById('import-btn').addEventListener('click', () => {
     document.getElementById('import-file').click();
@@ -240,7 +286,6 @@ function setupEventListeners() {
     }
   });
   
-  // Модальное окно данных
   document.getElementById('close-edit-data-modal').addEventListener('click', closeEditDataModal);
   document.getElementById('cancel-edit-data-btn').addEventListener('click', closeEditDataModal);
   document.getElementById('save-data-btn').addEventListener('click', saveDataCard);
@@ -257,7 +302,6 @@ function setupEventListeners() {
     }
   });
   
-  // TOTP обработчики
   document.getElementById('verify-pin-for-totp-btn').addEventListener('click', verifyPinForTotp);
   document.getElementById('totp-view-pin').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
@@ -291,7 +335,6 @@ function setupEventListeners() {
     updatePasswordStrength('edit-password', 'edit-password-strength');
   });
   
-  // Проверка силы пароля при вводе
   document.getElementById('add-password').addEventListener('input', () => {
     updatePasswordStrength('add-password', 'add-password-strength');
   });
@@ -300,12 +343,10 @@ function setupEventListeners() {
     updatePasswordStrength('edit-password', 'edit-password-strength');
   });
   
-  // Обработчики биометрии
   document.getElementById('biometric-enabled').addEventListener('change', handleBiometricToggle);
   document.getElementById('setup-biometric-btn').addEventListener('click', setupBiometric);
   document.getElementById('remove-biometric-btn').addEventListener('click', removeBiometric);
   
-  // Обработчики модального окна PIN для биометрии
   document.getElementById('close-biometric-pin-modal').addEventListener('click', closeBiometricPinModal);
   document.getElementById('cancel-biometric-pin-btn').addEventListener('click', closeBiometricPinModal);
   document.getElementById('save-biometric-pin-btn').addEventListener('click', saveBiometricPin);
@@ -391,6 +432,12 @@ function setupNavigation() {
         if (targetSection === 'totp') {
           checkPinForTotp();
         }
+        
+        if (targetSection === 'accessibility') {
+          if (typeof initAccessibilityMode === 'function' && !accessibilityInitialized) {
+            initAccessibilityMode();
+          }
+        }
       }
     });
   });
@@ -403,6 +450,421 @@ function loadExtensionVersion() {
     versionElement.textContent = manifest.version;
   }
 }
+
+async function initLanguageSwitcher() {
+  if (typeof i18n === 'undefined') {
+    console.error('i18n is not loaded!');
+    return;
+  }
+  
+  await i18n.init();
+  currentLanguage = i18n.getCurrentLang();
+  
+  const langButtons = document.querySelectorAll('.lang-btn[data-lang]');
+  langButtons.forEach(btn => {
+    if (btn.dataset.lang === currentLanguage) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+    
+    btn.addEventListener('click', async () => {
+      const lang = btn.dataset.lang;
+      await setLanguage(lang);
+      currentLanguage = lang;
+      
+      langButtons.forEach(b => {
+        b.classList.toggle('active', b.dataset.lang === lang);
+      });
+      
+      location.reload();
+    });
+  });
+}
+
+async function setLanguage(lang) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ language: lang }, () => {
+      if (typeof i18n !== 'undefined') {
+        i18n.setLanguage(lang);
+      }
+      resolve();
+    });
+  });
+}
+
+async function initThemeSwitcher() {
+  chrome.storage.sync.get(['theme', 'epilepsyMode'], (result) => {
+    const epilepsy = result.epilepsyMode || false;
+    currentTheme = epilepsy ? 'light' : (result.theme || 'light');
+    applyTheme(currentTheme);
+    
+    const themeButtons = document.querySelectorAll('#theme-switcher .lang-btn');
+    themeButtons.forEach(btn => {
+      if (btn.dataset.theme === currentTheme) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  });
+  
+  const themeButtons = document.querySelectorAll('#theme-switcher .lang-btn');
+  themeButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const theme = btn.dataset.theme;
+      await setTheme(theme);
+      currentTheme = theme;
+      
+      themeButtons.forEach(b => {
+        b.classList.toggle('active', b.dataset.theme === theme);
+      });
+    });
+  });
+}
+
+function setTheme(theme) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ theme: theme }, () => {
+      applyTheme(theme);
+      resolve();
+    });
+  });
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.body.setAttribute('data-theme', theme);
+}
+
+function initAccessibilityMode() {
+  if (accessibilityInitialized) return;
+  accessibilityInitialized = true;
+  
+  const epilepsyToggle = document.getElementById('epilepsyMode');
+  const fontSizeSelect = document.getElementById('fontSize');
+  const highContrastToggle = document.getElementById('highContrast');
+  const reducedMotionToggle = document.getElementById('reducedMotion');
+  const focusVisibleToggle = document.getElementById('focusVisible');
+  
+  if (!epilepsyToggle || !fontSizeSelect || !highContrastToggle || !reducedMotionToggle || !focusVisibleToggle) {
+    console.warn('Accessibility elements not found');
+    return;
+  }
+  
+  chrome.storage.sync.get(['epilepsyMode', 'accessibilitySettings'], (result) => {
+    const epilepsyMode = result.epilepsyMode || false;
+    const settings = result.accessibilitySettings || {};
+    
+    epilepsyToggle.checked = epilepsyMode;
+    
+    const fontSize = settings.fontSize || 'medium';
+    fontSizeSelect.value = fontSize;
+    applyFontSize(fontSize);
+    
+    highContrastToggle.checked = !!settings.highContrast;
+    applyHighContrast(settings.highContrast);
+    
+    reducedMotionToggle.checked = !!settings.reducedMotion;
+    applyReducedMotion(settings.reducedMotion);
+    
+    focusVisibleToggle.checked = !!settings.focusVisible;
+    applyFocusVisible(settings.focusVisible);
+    
+    const anyAccessibilityEnabled = epilepsyMode || settings.highContrast || settings.reducedMotion || settings.focusVisible;
+    applyAccessibilityMode(anyAccessibilityEnabled);
+  });
+  
+  // Event listeners
+  epilepsyToggle.addEventListener('change', async () => {
+    const enabled = epilepsyToggle.checked;
+    await setEpilepsyMode(enabled);
+    
+    // Check if any accessibility feature is enabled
+    const highContrast = highContrastToggle.checked;
+    const reducedMotion = reducedMotionToggle.checked;
+    const focusVisible = focusVisibleToggle.checked;
+    const anyAccessibilityEnabled = enabled || highContrast || reducedMotion || focusVisible;
+    
+    applyAccessibilityMode(anyAccessibilityEnabled);
+    
+    if (enabled) {
+      await setTheme('light');
+      currentTheme = 'light';
+      const themeButtons = document.querySelectorAll('#theme-switcher .lang-btn');
+      themeButtons.forEach(b => {
+        b.classList.toggle('active', b.dataset.theme === 'light');
+      });
+    }
+    
+    saveAccessibilitySettings();
+  });
+  
+  fontSizeSelect.addEventListener('change', (e) => {
+    const fontSize = e.target.value;
+    applyFontSize(fontSize);
+    saveAccessibilitySettings();
+  });
+  
+  highContrastToggle.addEventListener('change', () => {
+    const enabled = highContrastToggle.checked;
+    applyHighContrast(enabled);
+    
+    const epilepsy = epilepsyToggle.checked;
+    const reducedMotion = reducedMotionToggle.checked;
+    const focusVisible = focusVisibleToggle.checked;
+    const anyAccessibilityEnabled = epilepsy || enabled || reducedMotion || focusVisible;
+    
+    if (anyAccessibilityEnabled) {
+      document.documentElement.setAttribute('data-accessibility', 'true');
+      document.body.setAttribute('data-accessibility', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-accessibility');
+      document.body.removeAttribute('data-accessibility');
+    }
+    
+    saveAccessibilitySettings();
+  });
+  
+  reducedMotionToggle.addEventListener('change', () => {
+    const enabled = reducedMotionToggle.checked;
+    applyReducedMotion(enabled);
+    
+    const epilepsy = epilepsyToggle.checked;
+    const highContrast = highContrastToggle.checked;
+    const focusVisible = focusVisibleToggle.checked;
+    const anyAccessibilityEnabled = epilepsy || highContrast || enabled || focusVisible;
+    
+    if (anyAccessibilityEnabled) {
+      document.documentElement.setAttribute('data-accessibility', 'true');
+      document.body.setAttribute('data-accessibility', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-accessibility');
+      document.body.removeAttribute('data-accessibility');
+    }
+    
+    saveAccessibilitySettings();
+  });
+  
+  focusVisibleToggle.addEventListener('change', () => {
+    const enabled = focusVisibleToggle.checked;
+    applyFocusVisible(enabled);
+    
+    const epilepsy = epilepsyToggle.checked;
+    const highContrast = highContrastToggle.checked;
+    const reducedMotion = reducedMotionToggle.checked;
+    const anyAccessibilityEnabled = epilepsy || highContrast || reducedMotion || enabled;
+    
+    if (anyAccessibilityEnabled) {
+      document.documentElement.setAttribute('data-accessibility', 'true');
+      document.body.setAttribute('data-accessibility', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-accessibility');
+      document.body.removeAttribute('data-accessibility');
+    }
+    
+    saveAccessibilitySettings();
+  });
+  
+  checkSystemPreferences();
+}
+
+function setEpilepsyMode(enabled) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ epilepsyMode: enabled }, resolve);
+  });
+}
+
+function applyAccessibilityMode(enabled) {
+  if (enabled) {
+    document.documentElement.setAttribute('data-accessibility', 'true');
+    document.body.setAttribute('data-accessibility', 'true');
+    
+    if (currentTheme !== 'light') {
+      setTheme('light');
+      currentTheme = 'light';
+    }
+  } else {
+    document.documentElement.removeAttribute('data-accessibility');
+    document.body.removeAttribute('data-accessibility');
+  }
+}
+
+function applyFontSize(size) {
+  document.documentElement.setAttribute('data-font-size', size);
+  document.body.setAttribute('data-font-size', size);
+}
+
+function applyHighContrast(enabled) {
+  if (enabled) {
+    document.documentElement.setAttribute('data-high-contrast', 'true');
+    document.body.setAttribute('data-high-contrast', 'true');
+  } else {
+    document.documentElement.removeAttribute('data-high-contrast');
+    document.body.removeAttribute('data-high-contrast');
+  }
+}
+
+function applyReducedMotion(enabled) {
+  if (enabled) {
+    document.documentElement.setAttribute('data-reduced-motion', 'true');
+    document.body.setAttribute('data-reduced-motion', 'true');
+  } else {
+    document.documentElement.removeAttribute('data-reduced-motion');
+    document.body.removeAttribute('data-reduced-motion');
+  }
+}
+
+function applyFocusVisible(enabled) {
+  if (enabled) {
+    document.documentElement.setAttribute('data-focus-visible', 'true');
+    document.body.setAttribute('data-focus-visible', 'true');
+  } else {
+    document.documentElement.removeAttribute('data-focus-visible');
+    document.body.removeAttribute('data-focus-visible');
+  }
+}
+
+function checkSystemPreferences() {
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (prefersReducedMotion) {
+    const reducedMotionToggle = document.getElementById('reducedMotion');
+    if (reducedMotionToggle && !reducedMotionToggle.checked) {
+      reducedMotionToggle.checked = true;
+      applyReducedMotion(true);
+      saveAccessibilitySettings();
+    }
+  }
+}
+
+function saveAccessibilitySettings() {
+  const settings = {
+    fontSize: document.getElementById('fontSize')?.value || 'medium',
+    highContrast: document.getElementById('highContrast')?.checked || false,
+    reducedMotion: document.getElementById('reducedMotion')?.checked || false,
+    focusVisible: document.getElementById('focusVisible')?.checked || false
+  };
+  
+  chrome.storage.sync.set({ accessibilitySettings: settings }, () => {
+    // Check if any accessibility feature is enabled
+    const epilepsyMode = document.getElementById('epilepsyMode')?.checked || false;
+    const anyAccessibilityEnabled = epilepsyMode || settings.highContrast || settings.reducedMotion || settings.focusVisible;
+    
+    // Apply or remove accessibility mode based on any feature being enabled
+    if (anyAccessibilityEnabled) {
+      document.documentElement.setAttribute('data-accessibility', 'true');
+      document.body.setAttribute('data-accessibility', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-accessibility');
+      document.body.removeAttribute('data-accessibility');
+    }
+    
+    const saveStatus = document.getElementById('saveStatus');
+    if (saveStatus) {
+      saveStatus.textContent = typeof i18n !== 'undefined' ? i18n.t('options.saved') : 'Настройки сохранены!';
+      saveStatus.classList.add('show');
+      setTimeout(() => {
+        saveStatus.classList.remove('show');
+      }, 2000);
+    }
+  });
+}
+
+chrome.storage.onChanged.addListener(async (changes, namespace) => {
+  if (namespace === 'sync') {
+    if (changes.theme) {
+      const epilepsy = await new Promise(resolve => {
+        chrome.storage.sync.get(['epilepsyMode'], (result) => {
+          resolve(result.epilepsyMode || false);
+        });
+      });
+      
+      if (!epilepsy) {
+        currentTheme = changes.theme.newValue;
+        applyTheme(currentTheme);
+        
+        const themeButtons = document.querySelectorAll('#theme-switcher .lang-btn');
+        themeButtons.forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.theme === currentTheme);
+        });
+      }
+    }
+    
+    if (changes.epilepsyMode) {
+      const enabled = changes.epilepsyMode.newValue;
+      
+      const epilepsyToggle = document.getElementById('epilepsyMode');
+      if (epilepsyToggle) {
+        epilepsyToggle.checked = enabled;
+      }
+      
+      chrome.storage.sync.get(['accessibilitySettings'], (result) => {
+        const settings = result.accessibilitySettings || {};
+        const anyAccessibilityEnabled = enabled || settings.highContrast || settings.reducedMotion || settings.focusVisible;
+        
+        applyAccessibilityMode(anyAccessibilityEnabled);
+      });
+      
+      if (enabled && currentTheme !== 'light') {
+        setTheme('light');
+        currentTheme = 'light';
+        const themeButtons = document.querySelectorAll('#theme-switcher .lang-btn');
+        themeButtons.forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.theme === 'light');
+        });
+      }
+    }
+    
+    if (changes.accessibilitySettings) {
+      const settings = changes.accessibilitySettings.newValue || {};
+      
+      const fontSizeSelect = document.getElementById('fontSize');
+      if (fontSizeSelect && settings.fontSize) {
+        fontSizeSelect.value = settings.fontSize;
+        applyFontSize(settings.fontSize);
+      }
+      
+      const highContrastToggle = document.getElementById('highContrast');
+      if (highContrastToggle) {
+        highContrastToggle.checked = !!settings.highContrast;
+        applyHighContrast(settings.highContrast);
+      }
+      
+      const reducedMotionToggle = document.getElementById('reducedMotion');
+      if (reducedMotionToggle) {
+        reducedMotionToggle.checked = !!settings.reducedMotion;
+        applyReducedMotion(settings.reducedMotion);
+      }
+      
+      const focusVisibleToggle = document.getElementById('focusVisible');
+      if (focusVisibleToggle) {
+        focusVisibleToggle.checked = !!settings.focusVisible;
+        applyFocusVisible(settings.focusVisible);
+      }
+      
+      chrome.storage.sync.get(['epilepsyMode'], (result) => {
+        const epilepsy = result.epilepsyMode || false;
+        const anyAccessibilityEnabled = epilepsy || settings.highContrast || settings.reducedMotion || settings.focusVisible;
+        
+        if (anyAccessibilityEnabled) {
+          document.documentElement.setAttribute('data-accessibility', 'true');
+          document.body.setAttribute('data-accessibility', 'true');
+        } else {
+          document.documentElement.removeAttribute('data-accessibility');
+          document.body.removeAttribute('data-accessibility');
+        }
+      });
+    }
+    
+    if (changes.language) {
+      currentLanguage = changes.language.newValue;
+      if (typeof i18n !== 'undefined') {
+        i18n.setLanguage(currentLanguage);
+        location.reload();
+      }
+    }
+  }
+});
 
 async function savePin() {
   const pin = document.getElementById('pin-input').value;
@@ -483,7 +945,6 @@ async function changePin() {
     return;
   }
   
-  // Проверка сложности PIN: должен содержать хотя бы одну цифру и одну букву
   const hasDigit = /[0-9]/.test(newPin);
   const hasLetter = /[a-zA-Z]/.test(newPin);
   if (!hasDigit || !hasLetter) {
@@ -585,7 +1046,6 @@ function removeSite(site) {
   renderWhitelist();
 }
 
-// Безопасная функция для экранирования HTML
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
@@ -929,10 +1389,8 @@ async function importPasswords() {
       return;
     }
     
-    // Валидация и нормализация импортированных данных
     const validatedPasswords = [];
     for (const passwordData of decryptedPasswords) {
-      // Проверка обязательных полей
       if (!passwordData.domain || !passwordData.username || !passwordData.password) {
         console.warn('Пропущен пароль с неполными данными:', passwordData);
         continue;
@@ -947,7 +1405,6 @@ async function importPasswords() {
         continue;
       }
       
-      // Проверка на подозрительные паттерны
       if (normalizedDomain.includes('..') || normalizedDomain.startsWith('.') || normalizedDomain.endsWith('.')) {
         console.warn('Пропущен пароль с подозрительным доменом:', normalizedDomain);
         continue;
@@ -985,7 +1442,6 @@ async function importPasswords() {
       return;
     }
     
-    // Устанавливаем PIN в сессию для шифрования
     await chrome.runtime.sendMessage({
       action: 'verifyAndSetPin',
       pin: pin
@@ -1016,7 +1472,6 @@ async function importPasswords() {
       }
     }
     
-    // Очищаем сессию PIN после импорта
     await chrome.runtime.sendMessage({ action: 'clearSessionPin' });
     
     if (importedCount > 0) {
@@ -1120,11 +1575,9 @@ async function verifyPin(pin) {
       const computed = await computePinHash(pin, saltBytes);
       isValid = constantTimeCompare(computed, pinHash);
     } else {
-      // Legacy SHA-256 без соли
       const legacyHash = await hashPin(pin);
       isValid = constantTimeCompare(legacyHash, pinHash);
       if (isValid) {
-        // Мигрируем на PBKDF2 через фоновые утилиты
         await savePinHash(pin);
       }
     }
@@ -1144,7 +1597,6 @@ async function checkPinForPasswords() {
     return;
   }
   
-  // Проверяем, есть ли уже PIN в сессии
   try {
     const response = await chrome.runtime.sendMessage({ action: 'checkSessionPin' });
     if (response && response.hasPin) {
